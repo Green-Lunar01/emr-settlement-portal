@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme {
+  --color-lunar-primary: #167e62;
+  --color-lunar-primary-dark: #115f4b;
+  --color-lunar-sidebar: #122e29;
+  --color-lunar-background: #f7f8fa;
+  --color-lunar-text: #202b39;
+  --color-lunar-muted: #748091;
+  --color-lunar-border: #e5e9ef;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--color-lunar-background);
+  color: var(--color-lunar-text);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:not(:disabled),
+a,
+select {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+input,
+select,
+textarea {
+  min-width: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-lunar-primary);
+  outline-offset: 3px;
+}
