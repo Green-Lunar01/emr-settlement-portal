@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { Plus, Search, X } from "lucide-react";
+import { apiRequest, type ApiUser } from "../api/client";
 import { useApp } from "../hooks/useApp";
-import type {
-  ActivityLog,
-  User,
-} from "../types";
 
 interface CashierForm {
   name: string;
@@ -16,22 +13,14 @@ interface CashierForm {
 }
 
 export default function CashiersPage() {
-  const { data, currentUser, updateData } = useApp();
-
+  const { data, currentUser, refreshDirectory } = useApp();
   const [search, setSearch] = useState("");
   const [hospitalFilter, setHospitalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [assignmentCashierId, setAssignmentCashierId] =
-    useState<string | null>(null);
-
-  const [assignmentHospitalId, setAssignmentHospitalId] =
-    useState("");
-
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<CashierForm>({
     name: "",
     phone: "",
@@ -47,12 +36,9 @@ export default function CashiersPage() {
 
   const actor = currentUser;
   const isFinance = actor.role === "finance";
-
-  const availableHospitals = data.hospitals.filter(
-    (hospital) =>
-      actor.hospitalIds.includes(hospital.id),
+  const availableHospitals = data.hospitals.filter((hospital) =>
+    actor.hospitalIds.includes(hospital.id),
   );
-
   const visibleCashiers = data.users.filter(
     (user) =>
       user.role === "cashier" &&
@@ -60,60 +46,27 @@ export default function CashiersPage() {
         actor.hospitalIds.includes(hospitalId),
       ),
   );
+  const filteredCashiers = visibleCashiers.filter((cashier) => {
+    const matchesSearch = cashier.name
+      .toLowerCase()
+      .includes(search.trim().toLowerCase());
+    const matchesHospital =
+      !hospitalFilter || cashier.hospitalIds.includes(hospitalFilter);
+    const matchesStatus = !statusFilter || cashier.status === statusFilter;
 
-  const filteredCashiers = visibleCashiers.filter(
-    (cashier) => {
-      const matchesSearch = cashier.name
-        .toLowerCase()
-        .includes(search.trim().toLowerCase());
-
-      const matchesHospital =
-        !hospitalFilter ||
-        cashier.hospitalIds.includes(hospitalFilter);
-
-      const matchesStatus =
-        !statusFilter || cashier.status === statusFilter;
-
-      return (
-        matchesSearch &&
-        matchesHospital &&
-        matchesStatus
-      );
-    },
-  );
-
-  const assignmentCashier = data.users.find(
-    (user) => user.id === assignmentCashierId,
-  );
+    return matchesSearch && matchesHospital && matchesStatus;
+  });
 
   function hospitalName(id: string): string {
     return (
-      data.hospitals.find(
-        (hospital) => hospital.id === id,
-      )?.name ?? "Unknown hospital"
+      data.hospitals.find((hospital) => hospital.id === id)?.name ??
+      "Unknown hospital"
     );
-  }
-
-  function makeLog(
-    action: string,
-    cashierId: string,
-    hospitalId: string,
-  ): ActivityLog {
-    return {
-      id: crypto.randomUUID(),
-      actorId: actor.id,
-      hospitalId,
-      action,
-      entityType: "user",
-      entityId: cashierId,
-      createdAt: new Date().toISOString(),
-    };
   }
 
   function openCreateForm() {
     setError("");
     setMessage("");
-
     setForm({
       name: "",
       phone: "",
@@ -122,18 +75,12 @@ export default function CashiersPage() {
       confirmPassword: "",
       hospitalId: availableHospitals[0]?.id ?? "",
     });
-
     setShowCreateForm(true);
   }
 
-  function createCashier() {
+  async function createCashier(): Promise<void> {
     setError("");
     setMessage("");
-
-    if (!isFinance) {
-      setError("Only Finance can create cashier accounts.");
-      return;
-    }
 
     const name = form.name.trim();
     const phone = form.phone.trim();
@@ -164,236 +111,30 @@ export default function CashiersPage() {
       return;
     }
 
-    if (
-      !availableHospitals.some(
-        (hospital) => hospital.id === form.hospitalId,
-      )
-    ) {
-      setError("Select a hospital under your supervision.");
-      return;
-    }
-
-    const cashier: User = {
-      id: crypto.randomUUID(),
-      name,
-      phone,
-      email,
-      password: form.password,
-      role: "cashier",
-      status: "active",
-      hospitalIds: [form.hospitalId],
-      createdBy: actor.id,
-      createdAt: new Date().toISOString(),
-    };
+    setBusy(true);
 
     try {
-      updateData((current) => {
-        if (
-          current.users.some(
-            (user) =>
-              user.email.toLowerCase() === email,
-          )
-        ) {
-          throw new Error(
-            "An account already uses this email address.",
-          );
-        }
-
-        current.users.push(cashier);
-
-        current.activityLogs.unshift(
-          makeLog(
-            `Created cashier account for ${cashier.name}.`,
-            cashier.id,
-            form.hospitalId,
-          ),
-        );
-
-        return current;
+      const created = await apiRequest<ApiUser>("/api/users", {
+        method: "POST",
+        json: {
+          name,
+          phone,
+          email,
+          password: form.password,
+          facilityId: form.hospitalId,
+        },
       });
-
+      await refreshDirectory();
       setShowCreateForm(false);
       setMessage(
-        `Account created for ${cashier.name}. Provide the cashier with their email and password.`,
+        `Account created for ${created.name}. Provide the cashier with their email and password.`,
       );
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to create the account.",
+        err instanceof Error ? err.message : "Unable to create the account.",
       );
-    }
-  }
-
-  function changeAccountStatus(cashier: User) {
-    setError("");
-    setMessage("");
-
-    if (!isFinance) {
-      setError("Only Finance can change account status.");
-      return;
-    }
-
-    const nextStatus =
-      cashier.status === "active"
-        ? "inactive"
-        : "active";
-
-    const action =
-      nextStatus === "inactive"
-        ? "Deactivate"
-        : "Reactivate";
-
-    if (
-      !window.confirm(
-        `${action} ${cashier.name}'s account? Existing accounting records will be retained.`,
-      )
-    ) {
-      return;
-    }
-
-    try {
-      updateData((current) => {
-        const account = current.users.find(
-          (user) => user.id === cashier.id,
-        );
-
-        if (!account) {
-          throw new Error("Cashier account was not found.");
-        }
-
-        if (
-          !account.hospitalIds.some((id) =>
-            actor.hospitalIds.includes(id),
-          )
-        ) {
-          throw new Error(
-            "This cashier is outside your assigned hospitals.",
-          );
-        }
-
-        account.status = nextStatus;
-
-        current.activityLogs.unshift(
-          makeLog(
-            `${action}d cashier account for ${account.name}.`,
-            account.id,
-            account.hospitalIds[0],
-          ),
-        );
-
-        return current;
-      });
-
-      setMessage(
-        `${cashier.name}'s account is now ${nextStatus}.`,
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to update account status.",
-      );
-    }
-  }
-
-  function openAssignment(cashier: User) {
-    setError("");
-    setMessage("");
-    setAssignmentCashierId(cashier.id);
-    setAssignmentHospitalId(cashier.hospitalIds[0] ?? "");
-  }
-
-  function saveAssignment() {
-    setError("");
-    setMessage("");
-
-    if (!isFinance || !assignmentCashierId) {
-      setError("Only Finance can assign cashier accounts.");
-      return;
-    }
-
-    if (
-      !availableHospitals.some(
-        (hospital) =>
-          hospital.id === assignmentHospitalId,
-      )
-    ) {
-      setError("Select a hospital under your supervision.");
-      return;
-    }
-
-    try {
-      updateData((current) => {
-        const cashier = current.users.find(
-          (user) => user.id === assignmentCashierId,
-        );
-
-        if (!cashier || cashier.role !== "cashier") {
-          throw new Error("Cashier account was not found.");
-        }
-
-        if (
-          !cashier.hospitalIds.some((id) =>
-            actor.hospitalIds.includes(id),
-          )
-        ) {
-          throw new Error(
-            "This cashier is outside your assigned hospitals.",
-          );
-        }
-
-        if (
-          cashier.hospitalIds[0] === assignmentHospitalId
-        ) {
-          throw new Error(
-            "The cashier is already assigned to this hospital.",
-          );
-        }
-
-        // Keep existing financial records attached to their
-        // original hospital. Moving an account with wallet
-        // activity requires a transfer workflow later.
-        const hasWalletActivity =
-          current.topUps.some(
-            (topUp) => topUp.cashierId === cashier.id,
-          ) ||
-          current.dailyAccounts.some(
-            (account) => account.cashierId === cashier.id,
-          );
-
-        if (hasWalletActivity) {
-          throw new Error(
-            "This cashier has wallet activity. A hospital transfer must settle the existing wallet first.",
-          );
-        }
-
-        const previousHospitalId =
-          cashier.hospitalIds[0];
-
-        cashier.hospitalIds = [assignmentHospitalId];
-
-        current.activityLogs.unshift(
-          makeLog(
-            `Moved ${cashier.name} from ${hospitalName(
-              previousHospitalId,
-            )} to ${hospitalName(assignmentHospitalId)}.`,
-            cashier.id,
-            assignmentHospitalId,
-          ),
-        );
-
-        return current;
-      });
-
-      setAssignmentCashierId(null);
-      setMessage("Cashier hospital assignment updated.");
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to update hospital assignment.",
-      );
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -404,13 +145,10 @@ export default function CashiersPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">
-            Cashiers
-          </h1>
-
+          <h1 className="text-2xl font-semibold">Cashiers</h1>
           <p className="mt-2 text-sm text-lunar-muted">
             {isFinance
-              ? "Create and manage cashier accounts within your assigned hospitals."
+              ? "Create cashier accounts within your assigned hospitals."
               : "View cashiers assigned to your hospital."}
           </p>
         </div>
@@ -437,11 +175,8 @@ export default function CashiersPage() {
         </p>
       )}
 
-      {error && !showCreateForm && !assignmentCashierId && (
-        <p
-          role="alert"
-          className="mt-5 rounded-lg bg-red-50 p-4 text-sm text-red-700"
-        >
+      {error && !showCreateForm && (
+        <p role="alert" className="mt-5 rounded-lg bg-red-50 p-4 text-sm text-red-700">
           {error}
         </p>
       )}
@@ -449,48 +184,32 @@ export default function CashiersPage() {
       <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white">
         <div className="flex flex-wrap gap-3 border-b border-lunar-border p-4">
           <div className="relative min-w-48 flex-1">
-            <Search
-              size={17}
-              className="absolute left-3 top-3 text-lunar-muted"
-            />
-
+            <Search size={17} className="absolute left-3 top-3 text-lunar-muted" />
             <input
               aria-label="Search cashier name"
               value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="Search cashier name"
               className={`${inputClass} pl-10`}
             />
           </div>
-
           <select
             aria-label="Filter hospital"
             value={hospitalFilter}
-            onChange={(event) =>
-              setHospitalFilter(event.target.value)
-            }
+            onChange={(event) => setHospitalFilter(event.target.value)}
             className="rounded-lg border border-lunar-border px-3 py-2 text-sm"
           >
             <option value="">All assigned hospitals</option>
-
             {availableHospitals.map((hospital) => (
-              <option
-                key={hospital.id}
-                value={hospital.id}
-              >
+              <option key={hospital.id} value={hospital.id}>
                 {hospital.name}
               </option>
             ))}
           </select>
-
           <select
             aria-label="Filter account status"
             value={statusFilter}
-            onChange={(event) =>
-              setStatusFilter(event.target.value)
-            }
+            onChange={(event) => setStatusFilter(event.target.value)}
             className="rounded-lg border border-lunar-border px-3 py-2 text-sm"
           >
             <option value="">All statuses</option>
@@ -507,35 +226,21 @@ export default function CashiersPage() {
                 <th className="px-5 py-4">Contact</th>
                 <th className="px-5 py-4">Hospital</th>
                 <th className="px-5 py-4">Status</th>
-                {isFinance && (
-                  <th className="px-5 py-4">Actions</th>
-                )}
               </tr>
             </thead>
-
             <tbody>
               {filteredCashiers.map((cashier) => (
-                <tr
-                  key={cashier.id}
-                  className="border-t border-lunar-border"
-                >
+                <tr key={cashier.id} className="border-t border-lunar-border">
                   <td className="whitespace-nowrap px-5 py-4 font-medium">
                     {cashier.name}
                   </td>
-
                   <td className="px-5 py-4">
                     <p>{cashier.email}</p>
-                    <p className="mt-1 text-xs text-lunar-muted">
-                      {cashier.phone}
-                    </p>
+                    <p className="mt-1 text-xs text-lunar-muted">{cashier.phone}</p>
                   </td>
-
                   <td className="px-5 py-4">
-                    {cashier.hospitalIds
-                      .map(hospitalName)
-                      .join(", ")}
+                    {cashier.hospitalIds.map(hospitalName).join(", ")}
                   </td>
-
                   <td className="px-5 py-4">
                     <span
                       className={
@@ -547,39 +252,10 @@ export default function CashiersPage() {
                       {cashier.status}
                     </span>
                   </td>
-
-                  {isFinance && (
-                    <td className="px-5 py-4">
-                      <div className="flex gap-4 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openAssignment(cashier)
-                          }
-                          className="text-xs font-medium text-lunar-primary"
-                        >
-                          Change hospital
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            changeAccountStatus(cashier)
-                          }
-                          className="text-xs font-medium text-lunar-primary"
-                        >
-                          {cashier.status === "active"
-                            ? "Deactivate"
-                            : "Reactivate"}
-                        </button>
-                      </div>
-                    </td>
-                  )}
                 </tr>
               ))}
             </tbody>
           </table>
-
           {filteredCashiers.length === 0 && (
             <p className="p-8 text-center text-sm text-lunar-muted">
               No cashiers match your filters.
@@ -597,13 +273,9 @@ export default function CashiersPage() {
             className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6"
           >
             <div className="flex items-center justify-between">
-              <h2
-                id="create-cashier-title"
-                className="text-xl font-semibold"
-              >
+              <h2 id="create-cashier-title" className="text-xl font-semibold">
                 Create cashier account
               </h2>
-
               <button
                 type="button"
                 aria-label="Close"
@@ -617,7 +289,7 @@ export default function CashiersPage() {
               className="mt-6 space-y-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                createCashier();
+                void createCashier();
               }}
             >
               <label className="block text-sm">
@@ -626,15 +298,11 @@ export default function CashiersPage() {
                   required
                   value={form.name}
                   onChange={(event) =>
-                    setForm({
-                      ...form,
-                      name: event.target.value,
-                    })
+                    setForm({ ...form, name: event.target.value })
                   }
                   className={`${inputClass} mt-2`}
                 />
               </label>
-
               <label className="block text-sm">
                 Phone number
                 <input
@@ -642,15 +310,11 @@ export default function CashiersPage() {
                   type="tel"
                   value={form.phone}
                   onChange={(event) =>
-                    setForm({
-                      ...form,
-                      phone: event.target.value,
-                    })
+                    setForm({ ...form, phone: event.target.value })
                   }
                   className={`${inputClass} mt-2`}
                 />
               </label>
-
               <label className="block text-sm">
                 Email address
                 <input
@@ -658,41 +322,29 @@ export default function CashiersPage() {
                   type="email"
                   value={form.email}
                   onChange={(event) =>
-                    setForm({
-                      ...form,
-                      email: event.target.value,
-                    })
+                    setForm({ ...form, email: event.target.value })
                   }
                   className={`${inputClass} mt-2`}
                 />
               </label>
-
               <label className="block text-sm">
                 Hospital
                 <select
                   required
                   value={form.hospitalId}
                   onChange={(event) =>
-                    setForm({
-                      ...form,
-                      hospitalId: event.target.value,
-                    })
+                    setForm({ ...form, hospitalId: event.target.value })
                   }
                   className={`${inputClass} mt-2`}
                 >
                   <option value="">Select hospital</option>
-
                   {availableHospitals.map((hospital) => (
-                    <option
-                      key={hospital.id}
-                      value={hospital.id}
-                    >
+                    <option key={hospital.id} value={hospital.id}>
                       {hospital.name}
                     </option>
                   ))}
                 </select>
               </label>
-
               <label className="block text-sm">
                 Password
                 <input
@@ -702,15 +354,11 @@ export default function CashiersPage() {
                   autoComplete="new-password"
                   value={form.password}
                   onChange={(event) =>
-                    setForm({
-                      ...form,
-                      password: event.target.value,
-                    })
+                    setForm({ ...form, password: event.target.value })
                   }
                   className={`${inputClass} mt-2`}
                 />
               </label>
-
               <label className="block text-sm">
                 Confirm password
                 <input
@@ -720,123 +368,30 @@ export default function CashiersPage() {
                   autoComplete="new-password"
                   value={form.confirmPassword}
                   onChange={(event) =>
-                    setForm({
-                      ...form,
-                      confirmPassword: event.target.value,
-                    })
+                    setForm({ ...form, confirmPassword: event.target.value })
                   }
                   className={`${inputClass} mt-2`}
                 />
               </label>
-
               {error && (
-                <p
-                  role="alert"
-                  className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
-                >
+                <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
                   {error}
                 </p>
               )}
-
               <div className="flex justify-end gap-3 pt-3">
                 <button
                   type="button"
-                  onClick={() =>
-                    setShowCreateForm(false)
-                  }
+                  onClick={() => setShowCreateForm(false)}
                   className="rounded-lg border border-lunar-border px-4 py-2 text-sm"
                 >
                   Cancel
                 </button>
-
                 <button
                   type="submit"
-                  className="rounded-lg bg-lunar-primary px-4 py-2 text-sm font-medium text-white"
+                  disabled={busy}
+                  className="rounded-lg bg-lunar-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
                 >
                   Create account
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
-      )}
-
-      {assignmentCashier && isFinance && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="assign-cashier-title"
-            className="w-full max-w-md rounded-xl bg-white p-6"
-          >
-            <h2
-              id="assign-cashier-title"
-              className="text-xl font-semibold"
-            >
-              Change hospital
-            </h2>
-
-            <p className="mt-2 text-sm text-lunar-muted">
-              {assignmentCashier.name}
-            </p>
-
-            <form
-              className="mt-5 space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                saveAssignment();
-              }}
-            >
-              <label className="block text-sm">
-                Hospital
-                <select
-                  required
-                  value={assignmentHospitalId}
-                  onChange={(event) =>
-                    setAssignmentHospitalId(
-                      event.target.value,
-                    )
-                  }
-                  className={`${inputClass} mt-2`}
-                >
-                  <option value="">Select hospital</option>
-
-                  {availableHospitals.map((hospital) => (
-                    <option
-                      key={hospital.id}
-                      value={hospital.id}
-                    >
-                      {hospital.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {error && (
-                <p
-                  role="alert"
-                  className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
-                >
-                  {error}
-                </p>
-              )}
-
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setAssignmentCashierId(null)
-                  }
-                  className="rounded-lg border border-lunar-border px-4 py-2 text-sm"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="rounded-lg bg-lunar-primary px-4 py-2 text-sm text-white"
-                >
-                  Save assignment
                 </button>
               </div>
             </form>

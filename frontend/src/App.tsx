@@ -21,7 +21,11 @@ import TopUpPage from "./pages/TopUpPage";
 import { ROLE_HOME } from "./utils/roles";
 
 function HomeRedirect() {
-  const { currentUser } = useApp();
+  const { currentUser, sessionReady } = useApp();
+
+  if (!sessionReady) {
+    return <p className="p-8 text-sm text-lunar-muted">Loading…</p>;
+  }
 
   return (
     <Navigate

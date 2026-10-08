@@ -12,7 +12,11 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "dependencies": {
+    "mongodb": "^7.7.0"
+  },
   "devDependencies": {
+    "@types/node": "^26.6.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }

@@ -20,12 +20,16 @@ const demoAccounts = [
 ];
 
 export default function LoginPage() {
-  const { currentUser, login } = useApp();
+  const { currentUser, login, sessionReady } = useApp();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  if (!sessionReady) {
+    return <p className="p-8 text-sm text-lunar-muted">Loading…</p>;
+  }
 
   if (currentUser) {
     return (
@@ -33,14 +37,14 @@ export default function LoginPage() {
     );
   }
 
-  function signIn(
+  async function signIn(
     selectedEmail: string,
     selectedPassword: string,
-  ): void {
+  ): Promise<void> {
     setError("");
 
     try {
-      const user = login(selectedEmail, selectedPassword);
+      const user = await login(selectedEmail, selectedPassword);
 
       navigate(ROLE_HOME[user.role], {
         replace: true,
@@ -166,39 +170,11 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-8 rounded-xl border border-lunar-border bg-white p-5">
-            <h3 className="font-semibold">
-              Explore the demo portals
-            </h3>
-
-            <p className="mt-2 text-sm text-lunar-muted">
-              Each portal uses the same data in this browser.
-            </p>
-
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              {demoAccounts.map((account) => (
-                <button
-                  key={account.email}
-                  type="button"
-                  onClick={() =>
-                    signIn(account.email, "Lunar123!")
-                  }
-                  className="rounded-lg border border-lunar-border px-3 py-3 text-xs font-medium text-lunar-primary hover:bg-emerald-50"
-                >
-                  {account.label}
-                </button>
-              ))}
-            </div>
-
-            <p className="mt-4 text-xs text-lunar-muted">
-              Demo password: Lunar123!
-            </p>
-          </div>
+       
 
           <p className="mt-5 text-xs leading-relaxed text-lunar-muted">
-            Cashier accounts are created by Finance. This
-            prototype uses browser-local data and demo login
-            credentials.
+            Cashier accounts are created by Finance. EMR reviews
+            are stored on the server.
           </p>
         </div>
       </section>
