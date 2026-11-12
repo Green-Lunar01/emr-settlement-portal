@@ -19,9 +19,11 @@ import DepartmentsPage from "./pages/DepartmentsPage";
 import EmrPage from "./pages/EmrPage";
 import FacilitiesPage from "./pages/FacilitiesPage";
 import LoginPage from "./pages/LoginPage";
+import ServicesPage from "./pages/ServicesPage";
 import SignupPage from "./pages/SignupPage";
 import StaffPage from "./pages/StaffPage";
 import TopUpPage from "./pages/TopUpPage";
+import VerifyPage from "./pages/VerifyPage";
 
 import { ROLE_HOME } from "./utils/roles";
 
@@ -57,6 +59,11 @@ export default function App() {
           <Route
             path="/signup"
             element={<SignupPage />}
+          />
+
+          <Route
+            path="/verify/:id"
+            element={<VerifyPage />}
           />
 
           {/* Finance portal */}
@@ -165,8 +172,32 @@ export default function App() {
               />
 
               <Route
+                path="services"
+                element={<ServicesPage />}
+              />
+
+              <Route
                 path="facilities"
                 element={<FacilitiesPage />}
+              />
+            </Route>
+          </Route>
+
+          {/* Service Staff portal */}
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={["service_staff"]}
+              />
+            }
+          >
+            <Route
+              path="/service-staff"
+              element={<DashboardLayout />}
+            >
+              <Route
+                index
+                element={<BillingPage />}
               />
             </Route>
           </Route>

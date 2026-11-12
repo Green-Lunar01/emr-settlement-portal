@@ -77,6 +77,15 @@ export async function listDepartments(
   return departments.map(toPublicDepartment);
 }
 
+// Public: the sign-up form needs to offer a department before the
+// applicant has any account, for the service_staff role.
+export async function listPublicDepartments(
+  facilityId: string,
+): Promise<PublicDepartment[]> {
+  const departments = await listDepartmentsByFacility(facilityId);
+  return departments.filter((d) => d.active).map(toPublicDepartment);
+}
+
 export async function setDepartmentStatus(
   actor: UserDoc,
   departmentId: string,

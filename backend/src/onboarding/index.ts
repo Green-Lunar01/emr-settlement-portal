@@ -18,6 +18,7 @@ import {
   type UserDoc,
 } from "../entity";
 import {
+  findDepartment,
   findFacility,
   findOnboardingRequestById,
   findPendingOnboardingRequestByEmail,
@@ -48,6 +49,17 @@ export async function submitOnboardingRequest(
     throw new AppError(404, "The facility was not found.");
   }
 
+  let departmentId: string | null = null;
+
+  if (role === "service_staff") {
+    departmentId = requiredId(body.departmentId, "Choose a department.");
+    const department = await findDepartment(departmentId);
+
+    if (!department || department.facilityId !== facilityId) {
+      throw new AppError(404, "The department was not found.");
+    }
+  }
+
   const existingUser = await findUserByEmail(email);
 
   if (existingUser) {
@@ -72,6 +84,7 @@ export async function submitOnboardingRequest(
     passwordHash: hashPassword(password),
     role,
     facilityId,
+    departmentId,
     status: "Pending",
     reviewedBy: null,
     reviewedAt: null,
@@ -93,21 +106,29 @@ export async function submitOnboardingRequest(
     throw error;
   }
 
-  return toPublicOnboardingRequest(request, facility.name, null);
+  const departmentName = departmentId
+    ? (await findDepartment(departmentId))?.name ?? null
+    : null;
+
+  return toPublicOnboardingRequest(request, facility.name, null, departmentName);
 }
 
 async function presentRequest(
   request: OnboardingRequestDoc,
 ): Promise<PublicOnboardingRequest> {
-  const [facility, reviewer] = await Promise.all([
+  const [facility, reviewer, department] = await Promise.all([
     findFacility(request.facilityId),
     request.reviewedBy ? findUserById(request.reviewedBy) : Promise.resolve(null),
+    request.departmentId
+      ? findDepartment(request.departmentId)
+      : Promise.resolve(null),
   ]);
 
   return toPublicOnboardingRequest(
     request,
     facility?.name ?? "Unknown facility",
     reviewer?.name ?? null,
+    department?.name ?? null,
   );
 }
 
@@ -185,6 +206,7 @@ export async function approveOnboardingRequest(
     role: request.role,
     status: "active",
     facilityIds: [request.facilityId],
+    departmentId: request.departmentId,
     supervisorIds,
     createdBy: actor._id,
     createdAt: nowIso(),

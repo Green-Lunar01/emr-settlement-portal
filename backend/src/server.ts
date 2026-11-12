@@ -14,7 +14,7 @@ import {
   updateFigures,
 } from "./emr";
 import { listTapRecords, saveTapRecord } from "./tap";
-import { createStaffAccount, listCashiers } from "./users";
+import { createStaffAccount, listCashiers, setUserStatus } from "./users";
 import { createFacility, listPlatformAudit } from "./platform";
 import { listAllFacilities, listFacilities } from "./repository";
 import {
@@ -35,6 +35,7 @@ import {
 import {
   createDepartment,
   listDepartments,
+  listPublicDepartments,
   setDepartmentStatus,
 } from "./departments";
 import {
@@ -43,7 +44,18 @@ import {
   getBill,
   listBills,
   selectPaymentMethod,
+  verifyBill,
 } from "./billing";
+import {
+  getPatient,
+  registerPatient,
+  searchPatients,
+} from "./patients";
+import {
+  createServiceItem,
+  listServiceItems,
+  setServiceItemStatus,
+} from "./catalog";
 
 interface RouteContext {
   req: IncomingMessage;
@@ -223,6 +235,21 @@ const routes: Route[] = [
           name: facility.name,
         })),
       },
+    };
+  }),
+
+  // Public: the sign-up form needs a department list for the
+  // service_staff role, before the applicant has any account.
+  route("GET", "/api/departments/public", async ({ query }) => {
+    const facilityId = query.get("facilityId");
+
+    if (!facilityId) {
+      return { status: 200, body: { departments: [] } };
+    }
+
+    return {
+      status: 200,
+      body: { departments: await listPublicDepartments(facilityId) },
     };
   }),
 
@@ -496,6 +523,64 @@ const routes: Route[] = [
       return { status: 200, body: await confirmPayment(user, params.id, body) };
     },
   ),
+
+  // Public: this is what the receipt QR code links to, so it must work
+  // for anyone scanning it, signed in or not.
+  route("GET", "/api/bills/:id/verify", async ({ params }) => {
+    return { status: 200, body: await verifyBill(params.id) };
+  }),
+
+  route("POST", "/api/patients", async ({ req, body }) => {
+    const user = await requireUser(req);
+    return { status: 201, body: await registerPatient(user, body) };
+  }),
+
+  route("GET", "/api/patients", async ({ req, query }) => {
+    const user = await requireUser(req);
+    return {
+      status: 200,
+      body: {
+        patients: await searchPatients(user, { term: query.get("search") }),
+      },
+    };
+  }),
+
+  route("GET", "/api/patients/:id", async ({ req, params }) => {
+    const user = await requireUser(req);
+    return { status: 200, body: await getPatient(user, params.id) };
+  }),
+
+  route("POST", "/api/services", async ({ req, body }) => {
+    const user = await requireUser(req);
+    return { status: 201, body: await createServiceItem(user, body) };
+  }),
+
+  route("GET", "/api/services", async ({ req, query }) => {
+    const user = await requireUser(req);
+    return {
+      status: 200,
+      body: {
+        services: await listServiceItems(user, {
+          facilityId: query.get("facilityId"),
+        }),
+      },
+    };
+  }),
+
+  route("PATCH", "/api/services/:id", async ({ req, params, body }) => {
+    const user = await requireUser(req);
+    const active = (body as { active?: unknown })?.active !== false;
+    return {
+      status: 200,
+      body: await setServiceItemStatus(user, params.id, active),
+    };
+  }),
+
+  route("PATCH", "/api/users/:id/status", async ({ req, params, body }) => {
+    const user = await requireUser(req);
+    const active = (body as { active?: unknown })?.active !== false;
+    return { status: 200, body: await setUserStatus(user, params.id, active) };
+  }),
 ];
 
 export function createAppServer() {

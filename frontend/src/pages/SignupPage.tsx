@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Moon } from "lucide-react";
 import { Link } from "react-router-dom";
-import { apiRequest } from "../api/client";
+import { apiRequest, type ApiDepartment } from "../api/client";
 import type { UserRole } from "../types";
 
 interface ApiPublicFacility {
@@ -17,13 +17,15 @@ interface SignupForm {
   confirmPassword: string;
   role: UserRole;
   facilityId: string;
+  departmentId: string;
 }
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "cashier", label: "Cashier (Operations)" },
+  { value: "service_staff", label: "Service Staff" },
   { value: "facility_manager", label: "Facility Manager" },
   { value: "finance", label: "Finance (Auditor)" },
-  { value: "front_office", label: "Front Office" },
+  { value: "front_office", label: "Admin" },
 ];
 
 function emptyForm(): SignupForm {
@@ -35,11 +37,13 @@ function emptyForm(): SignupForm {
     confirmPassword: "",
     role: "cashier",
     facilityId: "",
+    departmentId: "",
   };
 }
 
 export default function SignupPage() {
   const [facilities, setFacilities] = useState<ApiPublicFacility[]>([]);
+  const [departments, setDepartments] = useState<ApiDepartment[]>([]);
   const [form, setForm] = useState<SignupForm>(emptyForm());
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -73,6 +77,35 @@ export default function SignupPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (form.role !== "service_staff" || !form.facilityId) {
+      setDepartments([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadDepartments(): Promise<void> {
+      try {
+        const result = await apiRequest<{ departments: ApiDepartment[] }>(
+          `/api/departments/public?facilityId=${encodeURIComponent(form.facilityId)}`,
+        );
+
+        if (!cancelled) {
+          setDepartments(result.departments);
+        }
+      } catch {
+        // leave the select empty if this fails
+      }
+    }
+
+    void loadDepartments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.role, form.facilityId]);
+
   async function submit(): Promise<void> {
     setError("");
 
@@ -96,6 +129,11 @@ export default function SignupPage() {
       return;
     }
 
+    if (form.role === "service_staff" && !form.departmentId) {
+      setError("Select which department you work at.");
+      return;
+    }
+
     setBusy(true);
 
     try {
@@ -108,6 +146,7 @@ export default function SignupPage() {
           password: form.password,
           role: form.role,
           facilityId: form.facilityId,
+          departmentId: form.role === "service_staff" ? form.departmentId : undefined,
         },
       });
 
@@ -122,45 +161,55 @@ export default function SignupPage() {
   }
 
   const inputClass =
-    "mt-2 w-full rounded-lg border border-lunar-border bg-white px-3 py-3 text-sm";
+    "mt-2 w-full rounded-xl border border-lunar-border bg-white px-3 py-3 text-sm shadow-card focus:border-lunar-primary";
 
   return (
     <main className="grid min-h-screen lg:grid-cols-2">
-      <section className="flex flex-col justify-between bg-lunar-sidebar p-8 text-white lg:p-14">
-        <div className="flex items-center gap-3">
-          <Moon size={32} className="text-emerald-300" />
+      <section className="relative hidden flex-col justify-between overflow-hidden bg-lunar-sidebar p-14 text-white lg:flex">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-40"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 20% 20%, rgba(45,212,191,0.25), transparent 45%), radial-gradient(circle at 80% 70%, rgba(15,157,120,0.3), transparent 50%)",
+          }}
+        />
+
+        <div className="relative flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-lunar-primary to-lunar-accent shadow-raised">
+            <Moon size={22} className="text-white" />
+          </div>
           <div>
-            <p className="text-xl font-bold">Lunar</p>
-            <p className="text-xs tracking-widest text-emerald-200">
-              ACCOUNTING SYSTEM
+            <p className="text-xl font-bold leading-tight">Lunar</p>
+            <p className="text-[11px] font-medium tracking-widest text-white/50">
+              HOSPITAL REVENUE PLATFORM
             </p>
           </div>
         </div>
 
-        <div className="my-12 max-w-lg">
+        <div className="relative my-12 max-w-lg">
           <h1 className="text-4xl font-semibold leading-tight lg:text-5xl">
             Request access.
           </h1>
-          <p className="mt-6 leading-relaxed text-emerald-100">
-            Submit your details below. Front Office reviews every request
+          <p className="mt-6 leading-relaxed text-white/70">
+            Submit your details below. An admin reviews every request
             before an account is created.
           </p>
         </div>
 
-        <p className="text-sm text-emerald-200">
-          <Link to="/login" className="underline">
+        <p className="relative text-sm text-white/50">
+          <Link to="/login" className="underline hover:text-white">
             Back to sign in
           </Link>
         </p>
       </section>
 
-      <section className="flex items-center justify-center p-6 lg:p-12">
+      <section className="flex items-center justify-center bg-lunar-background p-6 lg:bg-white lg:p-12">
         <div className="w-full max-w-md">
           {submitted ? (
             <div>
-              <h2 className="text-3xl font-semibold">Request submitted</h2>
+              <h2 className="text-3xl font-semibold tracking-tight">Request submitted</h2>
               <p className="mt-4 text-sm text-lunar-muted">
-                Front Office will review your request. You'll be able to
+                An admin will review your request. You'll be able to
                 sign in once it's approved.
               </p>
               <Link
@@ -172,7 +221,7 @@ export default function SignupPage() {
             </div>
           ) : (
             <>
-              <h2 className="text-3xl font-semibold">Request access</h2>
+              <h2 className="text-3xl font-semibold tracking-tight">Request access</h2>
               <p className="mt-3 text-sm text-lunar-muted">
                 Tell us who you are and which facility you work at.
               </p>
@@ -228,7 +277,11 @@ export default function SignupPage() {
                   <select
                     value={form.role}
                     onChange={(event) =>
-                      setForm({ ...form, role: event.target.value as UserRole })
+                      setForm({
+                        ...form,
+                        role: event.target.value as UserRole,
+                        departmentId: "",
+                      })
                     }
                     className={inputClass}
                   >
@@ -258,6 +311,27 @@ export default function SignupPage() {
                     ))}
                   </select>
                 </label>
+
+                {form.role === "service_staff" && (
+                  <label className="block text-sm font-medium">
+                    Department (service point)
+                    <select
+                      required
+                      value={form.departmentId}
+                      onChange={(event) =>
+                        setForm({ ...form, departmentId: event.target.value })
+                      }
+                      className={inputClass}
+                    >
+                      <option value="">Select department</option>
+                      {departments.map((department) => (
+                        <option key={department.id} value={department.id}>
+                          {department.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
 
                 <label className="block text-sm font-medium">
                   Password
@@ -301,7 +375,7 @@ export default function SignupPage() {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="w-full rounded-lg bg-lunar-primary px-4 py-3 font-medium text-white disabled:opacity-60"
+                  className="w-full rounded-xl bg-lunar-primary px-4 py-3 font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
                 >
                   Submit request
                 </button>

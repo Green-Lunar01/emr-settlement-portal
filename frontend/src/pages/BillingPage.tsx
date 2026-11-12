@@ -5,22 +5,12 @@ import {
   apiRequest,
   type ApiBill,
   type ApiDepartment,
+  type ApiPatient,
+  type ApiServiceItem,
   type PaymentMethod,
 } from "../api/client";
 import { useApp } from "../hooks/useApp";
 import { formatMoney } from "../utils/accounting";
-
-interface BillForm {
-  facilityId: string;
-  departmentId: string;
-  payerName: string;
-  description: string;
-  amount: string;
-}
-
-function emptyForm(facilityId: string): BillForm {
-  return { facilityId, departmentId: "", payerName: "", description: "", amount: "" };
-}
 
 function StatusBadge({ value }: { value: string }) {
   const colour =
@@ -37,12 +27,24 @@ function StatusBadge({ value }: { value: string }) {
   );
 }
 
+interface NewPatientForm {
+  name: string;
+  phone: string;
+  email: string;
+}
+
+function emptyPatientForm(): NewPatientForm {
+  return { name: "", phone: "", email: "" };
+}
+
 export default function BillingPage() {
-  const { data, currentUser } = useApp();
+  const { currentUser } = useApp();
   const actor = currentUser;
+  const isServiceStaff = actor?.role === "service_staff";
 
   const [bills, setBills] = useState<ApiBill[]>([]);
   const [departments, setDepartments] = useState<ApiDepartment[]>([]);
+  const [services, setServices] = useState<ApiServiceItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
@@ -50,7 +52,15 @@ export default function BillingPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [form, setForm] = useState<BillForm>(emptyForm(""));
+
+  // New-bill wizard state
+  const [patientSearch, setPatientSearch] = useState("");
+  const [patientResults, setPatientResults] = useState<ApiPatient[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<ApiPatient | null>(null);
+  const [showPatientForm, setShowPatientForm] = useState(false);
+  const [patientForm, setPatientForm] = useState<NewPatientForm>(emptyPatientForm());
+  const [departmentId, setDepartmentId] = useState("");
+  const [cart, setCart] = useState<Map<string, number>>(new Map());
   const [method, setMethod] = useState<PaymentMethod>("Transfer");
 
   const [error, setError] = useState("");
@@ -64,17 +74,23 @@ export default function BillingPage() {
     setLoading(true);
 
     try {
-      const [billResult, departmentResult] = await Promise.all([
+      const [billResult, departmentResult, serviceResult] = await Promise.all([
         apiRequest<{ bills: ApiBill[] }>("/api/bills"),
         facilityId
           ? apiRequest<{ departments: ApiDepartment[] }>(
               `/api/departments?facilityId=${encodeURIComponent(facilityId)}`,
             )
           : Promise.resolve({ departments: [] }),
+        facilityId
+          ? apiRequest<{ services: ApiServiceItem[] }>(
+              `/api/services?facilityId=${encodeURIComponent(facilityId)}`,
+            )
+          : Promise.resolve({ services: [] }),
       ]);
 
       setBills(billResult.bills);
       setDepartments(departmentResult.departments.filter((d) => d.active));
+      setServices(serviceResult.services.filter((s) => s.active));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load bills.");
     } finally {
@@ -94,10 +110,30 @@ export default function BillingPage() {
   const records = bills
     .filter(
       (bill) =>
-        bill.payerName.toLowerCase().includes(search.trim().toLowerCase()) &&
+        bill.patientName.toLowerCase().includes(search.trim().toLowerCase()) &&
         (!statusFilter || bill.status === statusFilter),
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const effectiveDepartmentId = isServiceStaff
+    ? actor.departmentId ?? ""
+    : departmentId;
+
+  const availableItems = services.filter(
+    (item) => item.departmentId === effectiveDepartmentId,
+  );
+
+  const cartLines = Array.from(cart.entries())
+    .map(([serviceItemId, quantity]) => {
+      const item = services.find((s) => s.id === serviceItemId);
+      return item ? { item, quantity } : null;
+    })
+    .filter((line): line is { item: ApiServiceItem; quantity: number } => !!line);
+
+  const cartTotal = cartLines.reduce(
+    (total, line) => total + line.item.price * line.quantity,
+    0,
+  );
 
   function upsertBill(bill: ApiBill): void {
     setBills((current) => {
@@ -108,7 +144,13 @@ export default function BillingPage() {
 
   function openNewBill() {
     setSelectedId(null);
-    setForm(emptyForm(facilityId));
+    setPatientSearch("");
+    setPatientResults([]);
+    setSelectedPatient(null);
+    setShowPatientForm(false);
+    setPatientForm(emptyPatientForm());
+    setDepartmentId(isServiceStaff ? actor.departmentId ?? "" : "");
+    setCart(new Map());
     setMethod("Transfer");
     setError("");
     setMessage("");
@@ -123,18 +165,82 @@ export default function BillingPage() {
     setModalOpen(true);
   }
 
+  async function searchPatient(): Promise<void> {
+    setError("");
+
+    if (!patientSearch.trim()) {
+      return;
+    }
+
+    try {
+      const result = await apiRequest<{ patients: ApiPatient[] }>(
+        `/api/patients?search=${encodeURIComponent(patientSearch.trim())}`,
+      );
+      setPatientResults(result.patients);
+
+      if (result.patients.length === 0) {
+        setShowPatientForm(true);
+        setPatientForm({ ...emptyPatientForm(), phone: patientSearch.trim() });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to search patients.");
+    }
+  }
+
+  async function registerPatient(): Promise<void> {
+    setError("");
+
+    if (!patientForm.name.trim() || !patientForm.phone.trim() || !patientForm.email.trim()) {
+      setError("Fill in the patient's name, phone, and email.");
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      const patient = await apiRequest<ApiPatient>("/api/patients", {
+        method: "POST",
+        json: {
+          name: patientForm.name.trim(),
+          phone: patientForm.phone.trim(),
+          email: patientForm.email.trim(),
+        },
+      });
+
+      setSelectedPatient(patient);
+      setShowPatientForm(false);
+      setMessage(`Registered ${patient.name} (${patient.uniqueId}).`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to register patient.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function setQuantity(serviceItemId: string, quantity: number): void {
+    setCart((current) => {
+      const next = new Map(current);
+
+      if (quantity <= 0) {
+        next.delete(serviceItemId);
+      } else {
+        next.set(serviceItemId, quantity);
+      }
+
+      return next;
+    });
+  }
+
   async function raiseBill(): Promise<void> {
     setError("");
-    const amount = Number(form.amount);
 
-    if (
-      !form.departmentId ||
-      !form.payerName.trim() ||
-      !form.description.trim() ||
-      !Number.isFinite(amount) ||
-      amount <= 0
-    ) {
-      setError("Fill in all fields with a valid amount.");
+    if (!selectedPatient) {
+      setError("Search for or register a patient first.");
+      return;
+    }
+
+    if (cartLines.length === 0) {
+      setError("Add at least one item to the bill.");
       return;
     }
 
@@ -144,11 +250,12 @@ export default function BillingPage() {
       const bill = await apiRequest<ApiBill>("/api/bills", {
         method: "POST",
         json: {
-          facilityId: form.facilityId,
-          departmentId: form.departmentId,
-          payerName: form.payerName.trim(),
-          description: form.description.trim(),
-          amount,
+          facilityId,
+          patientId: selectedPatient.id,
+          items: cartLines.map((line) => ({
+            serviceItemId: line.item.id,
+            quantity: line.quantity,
+          })),
         },
       });
 
@@ -176,7 +283,7 @@ export default function BillingPage() {
       upsertBill(bill);
       setMessage(
         method === "Transfer"
-          ? "Virtual account generated. Share it with the payer."
+          ? "Virtual account generated. The patient has also been emailed."
           : "Awaiting confirmation that money has been collected.",
       );
     } catch (err) {
@@ -200,7 +307,7 @@ export default function BillingPage() {
       );
 
       upsertBill(bill);
-      setMessage("Payment confirmed. Receipt is ready to print.");
+      setMessage("Payment confirmed. Receipt emailed and ready to print.");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Unable to confirm payment.",
@@ -219,14 +326,14 @@ export default function BillingPage() {
         <div>
           <h1 className="text-2xl font-semibold">Billing</h1>
           <p className="mt-2 text-sm text-lunar-muted">
-            Raise bills, collect payment, and print receipts.
+            Register patients, raise bills, collect payment, and print receipts.
           </p>
         </div>
 
         <button
           type="button"
           onClick={openNewBill}
-          disabled={departments.length === 0}
+          disabled={services.length === 0}
           className="flex items-center gap-2 rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
         >
           <Plus size={18} />
@@ -234,10 +341,10 @@ export default function BillingPage() {
         </button>
       </div>
 
-      {departments.length === 0 && (
+      {services.length === 0 && (
         <p className="mt-5 rounded-lg bg-amber-50 p-4 text-sm text-amber-800">
-          No departments have been set up yet. Ask Front Office to add one
-          before raising a bill.
+          No priced services have been set up yet. Ask an admin to register
+          drugs and services before raising a bill.
         </p>
       )}
 
@@ -258,8 +365,8 @@ export default function BillingPage() {
           <div className="relative min-w-48 flex-1">
             <Search size={17} className="absolute left-3 top-3 text-lunar-muted" />
             <input
-              aria-label="Search payer name"
-              placeholder="Search payer name"
+              aria-label="Search patient name"
+              placeholder="Search patient name"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="w-full rounded-lg border border-lunar-border py-2.5 pl-10 pr-3 text-sm"
@@ -284,8 +391,9 @@ export default function BillingPage() {
           <table className="w-full whitespace-nowrap text-left text-sm">
             <thead className="bg-lunar-background text-xs text-lunar-muted">
               <tr>
-                <th className="px-4 py-4">Payer</th>
+                <th className="px-4 py-4">Patient</th>
                 <th className="px-4 py-4">Department</th>
+                <th className="px-4 py-4">Raised by</th>
                 <th className="px-4 py-4">Amount</th>
                 <th className="px-4 py-4">Method</th>
                 <th className="px-4 py-4">Status</th>
@@ -297,10 +405,16 @@ export default function BillingPage() {
               {records.map((bill) => (
                 <tr key={bill.id} className="border-t border-lunar-border">
                   <td className="px-4 py-4">
-                    <p className="font-medium">{bill.payerName}</p>
-                    <p className="mt-1 text-xs text-lunar-muted">{bill.description}</p>
+                    <p className="font-medium">{bill.patientName}</p>
+                    <p className="mt-1 text-xs text-lunar-muted">{bill.patientUniqueId}</p>
                   </td>
                   <td className="px-4 py-4">{bill.departmentName}</td>
+                  <td className="px-4 py-4">
+                    <p>{bill.raisedByName}</p>
+                    <p className="mt-1 text-xs text-lunar-muted">
+                      {bill.raisedByRole === "service_staff" ? "Service point" : "Cashier"}
+                    </p>
+                  </td>
                   <td className="px-4 py-4 font-medium">{formatMoney(bill.amount)}</td>
                   <td className="px-4 py-4">{bill.paymentMethod ?? "—"}</td>
                   <td className="px-4 py-4">
@@ -347,91 +461,226 @@ export default function BillingPage() {
             </div>
 
             {!selectedBill && (
-              <form
-                className="mt-6 space-y-4"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void raiseBill();
-                }}
-              >
-                <label className="block text-sm font-medium">
-                  Department
-                  <select
-                    required
-                    value={form.departmentId}
-                    onChange={(event) =>
-                      setForm({ ...form, departmentId: event.target.value })
-                    }
-                    className={inputClass}
-                  >
-                    <option value="">Select department</option>
-                    {departments.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <div className="mt-6 space-y-5">
+                {!selectedPatient ? (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium">
+                      Find patient by phone, unique ID, or name
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          value={patientSearch}
+                          onChange={(event) => setPatientSearch(event.target.value)}
+                          placeholder="e.g. 08030000001 or PT-000001"
+                          className="w-full rounded-lg border border-lunar-border px-3 py-2.5 text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void searchPatient()}
+                          className="whitespace-nowrap rounded-lg border border-lunar-border px-4 py-2.5 text-sm font-medium"
+                        >
+                          Search
+                        </button>
+                      </div>
+                    </label>
 
-                <label className="block text-sm font-medium">
-                  Payer name
-                  <input
-                    required
-                    value={form.payerName}
-                    onChange={(event) => setForm({ ...form, payerName: event.target.value })}
-                    className={inputClass}
-                  />
-                </label>
+                    {patientResults.length > 0 && (
+                      <div className="space-y-2">
+                        {patientResults.map((patient) => (
+                          <button
+                            key={patient.id}
+                            type="button"
+                            onClick={() => setSelectedPatient(patient)}
+                            className="w-full rounded-lg border border-lunar-border p-3 text-left text-sm hover:border-lunar-primary"
+                          >
+                            <p className="font-medium">{patient.name}</p>
+                            <p className="mt-1 text-xs text-lunar-muted">
+                              {patient.uniqueId} · {patient.phone}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
-                <label className="block text-sm font-medium">
-                  Description
-                  <input
-                    required
-                    value={form.description}
-                    onChange={(event) =>
-                      setForm({ ...form, description: event.target.value })
-                    }
-                    placeholder="e.g. Consultation fee"
-                    className={inputClass}
-                  />
-                </label>
+                    {!showPatientForm && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPatientForm(true)}
+                        className="text-sm font-medium text-lunar-primary"
+                      >
+                        Register a new patient
+                      </button>
+                    )}
 
-                <label className="block text-sm font-medium">
-                  Amount (₦)
-                  <input
-                    required
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={form.amount}
-                    onChange={(event) => setForm({ ...form, amount: event.target.value })}
-                    className={inputClass}
-                  />
-                </label>
+                    {showPatientForm && (
+                      <div className="space-y-3 rounded-lg border border-lunar-border p-4">
+                        <label className="block text-sm">
+                          Full name
+                          <input
+                            value={patientForm.name}
+                            onChange={(event) =>
+                              setPatientForm({ ...patientForm, name: event.target.value })
+                            }
+                            className={inputClass}
+                          />
+                        </label>
+                        <label className="block text-sm">
+                          Phone number
+                          <input
+                            value={patientForm.phone}
+                            onChange={(event) =>
+                              setPatientForm({ ...patientForm, phone: event.target.value })
+                            }
+                            className={inputClass}
+                          />
+                        </label>
+                        <label className="block text-sm">
+                          Email address
+                          <input
+                            type="email"
+                            value={patientForm.email}
+                            onChange={(event) =>
+                              setPatientForm({ ...patientForm, email: event.target.value })
+                            }
+                            className={inputClass}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void registerPatient()}
+                          className="rounded-lg bg-lunar-primary px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+                        >
+                          Register patient
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between rounded-lg bg-lunar-background p-4">
+                      <div>
+                        <p className="font-medium">{selectedPatient.name}</p>
+                        <p className="mt-1 text-xs text-lunar-muted">
+                          {selectedPatient.uniqueId} · {selectedPatient.phone}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPatient(null)}
+                        className="text-xs font-medium text-lunar-primary"
+                      >
+                        Change
+                      </button>
+                    </div>
 
-                {error && (
+                    {!isServiceStaff && (
+                      <label className="block text-sm font-medium">
+                        Department
+                        <select
+                          value={departmentId}
+                          onChange={(event) => {
+                            setDepartmentId(event.target.value);
+                            setCart(new Map());
+                          }}
+                          className={inputClass}
+                        >
+                          <option value="">Select department</option>
+                          {departments.map((department) => (
+                            <option key={department.id} value={department.id}>
+                              {department.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+
+                    {effectiveDepartmentId && (
+                      <div className="rounded-lg border border-lunar-border">
+                        <h3 className="border-b border-lunar-border bg-lunar-background px-4 py-3 text-sm font-semibold">
+                          Items
+                        </h3>
+                        <div className="divide-y divide-lunar-border">
+                          {availableItems.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between gap-3 px-4 py-3"
+                            >
+                              <div>
+                                <p className="text-sm font-medium">{item.name}</p>
+                                <p className="text-xs text-lunar-muted">
+                                  {formatMoney(item.price)}
+                                </p>
+                              </div>
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={cart.get(item.id) ?? 0}
+                                onChange={(event) =>
+                                  setQuantity(item.id, Number(event.target.value))
+                                }
+                                className="w-20 rounded-lg border border-lunar-border px-2 py-1.5 text-sm"
+                              />
+                            </div>
+                          ))}
+
+                          {availableItems.length === 0 && (
+                            <p className="p-4 text-sm text-lunar-muted">
+                              No priced items for this department yet.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {cartLines.length > 0 && (
+                      <div className="rounded-lg bg-lunar-background p-4">
+                        <p className="text-sm font-medium">Total: {formatMoney(cartTotal)}</p>
+                      </div>
+                    )}
+
+                    {error && (
+                      <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                        {error}
+                      </p>
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={busy || cartLines.length === 0}
+                      onClick={() => void raiseBill()}
+                      className="rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+                    >
+                      Raise bill
+                    </button>
+                  </>
+                )}
+
+                {error && !selectedPatient && (
                   <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
                     {error}
                   </p>
                 )}
-
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
-                >
-                  Raise bill
-                </button>
-              </form>
+              </div>
             )}
 
             {selectedBill && (
               <div className="mt-5 space-y-5">
                 <div className="rounded-lg bg-lunar-background p-4">
-                  <p className="font-medium">{selectedBill.payerName}</p>
-                  <p className="mt-1 text-sm text-lunar-muted">
-                    {selectedBill.description} · {selectedBill.departmentName}
+                  <p className="font-medium">{selectedBill.patientName}</p>
+                  <p className="mt-1 text-xs text-lunar-muted">
+                    {selectedBill.patientUniqueId} · {selectedBill.departmentName}
                   </p>
+                  <ul className="mt-3 space-y-1 text-sm text-lunar-muted">
+                    {selectedBill.items.map((item) => (
+                      <li key={item.serviceItemId} className="flex justify-between">
+                        <span>
+                          {item.name} x{item.quantity}
+                        </span>
+                        <span>{formatMoney(item.unitPrice * item.quantity)}</span>
+                      </li>
+                    ))}
+                  </ul>
                   <p className="mt-3 text-2xl font-semibold">
                     {formatMoney(selectedBill.amount)}
                   </p>
@@ -485,8 +734,9 @@ export default function BillingPage() {
                       </p>
                     </div>
                     <p className="text-xs text-lunar-muted">
-                      Generated by TAP for this bill. Once the transfer
-                      reflects, confirm it below to print the receipt.
+                      Generated by TAP for this bill, and emailed to the
+                      patient. Once the transfer reflects, confirm it below
+                      to print the receipt.
                     </p>
                     <button
                       type="button"
@@ -522,10 +772,6 @@ export default function BillingPage() {
                     <p className="text-lg font-semibold">{selectedBill.receiptNumber}</p>
                     <dl className="space-y-1 text-sm text-lunar-muted">
                       <div className="flex justify-between">
-                        <dt>Payer</dt>
-                        <dd>{selectedBill.payerName}</dd>
-                      </div>
-                      <div className="flex justify-between">
                         <dt>Amount</dt>
                         <dd>{formatMoney(selectedBill.amount)}</dd>
                       </div>
@@ -544,10 +790,25 @@ export default function BillingPage() {
                         </dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt>Collected by</dt>
+                        <dt>Cleared by</dt>
                         <dd>{selectedBill.confirmedByName ?? "—"}</dd>
                       </div>
                     </dl>
+
+                    {selectedBill.qrDataUrl && (
+                      <div>
+                        <img
+                          src={selectedBill.qrDataUrl}
+                          alt="Receipt verification QR code"
+                          width={160}
+                          height={160}
+                        />
+                        <p className="mt-2 text-xs text-lunar-muted">
+                          Scan to verify this receipt. Also emailed to the patient.
+                        </p>
+                      </div>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => window.print()}
@@ -569,8 +830,6 @@ export default function BillingPage() {
           </section>
         </div>
       )}
-
-      {data.hospitals.length === 0 && null}
     </div>
   );
 }

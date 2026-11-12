@@ -7,6 +7,8 @@ import {
   emrRecords,
   facilities,
   onboardingRequests,
+  patients,
+  serviceItems,
   sessions,
   tapRecords,
   topUps,
@@ -22,6 +24,8 @@ import type {
   FacilityDoc,
   IterationDoc,
   OnboardingRequestDoc,
+  PatientDoc,
+  ServiceItemDoc,
   SessionDoc,
   TapDoc,
   TopUpDoc,
@@ -57,6 +61,14 @@ export async function findUserByEmail(email: string): Promise<UserDoc | null> {
 
 export async function insertUser(user: UserDoc): Promise<void> {
   await users().insertOne(user);
+}
+
+export async function setUserStatus(
+  userId: string,
+  status: UserDoc["status"],
+): Promise<boolean> {
+  const result = await users().updateOne({ _id: userId }, { $set: { status } });
+  return result.matchedCount === 1;
 }
 
 export async function listSupervisedCashiers(
@@ -502,24 +514,12 @@ export async function saveBill(
 }
 
 export async function listBillsQuery(input: {
-  cashierId?: string;
-  cashierIds?: string[];
   facilityId?: string;
   facilityIds?: string[];
+  departmentId?: string;
+  patientId?: string;
 }): Promise<BillDoc[]> {
-  if (input.cashierIds && input.cashierIds.length === 0) {
-    return [];
-  }
-
   const filter: Filter<BillDoc> = {};
-
-  if (input.cashierId) {
-    filter.cashierId = input.cashierId;
-  }
-
-  if (input.cashierIds) {
-    filter.cashierId = { $in: input.cashierIds };
-  }
 
   if (input.facilityId) {
     filter.facilityId = input.facilityId;
@@ -527,6 +527,14 @@ export async function listBillsQuery(input: {
 
   if (input.facilityIds) {
     filter.facilityId = { $in: input.facilityIds };
+  }
+
+  if (input.departmentId) {
+    filter.departmentId = input.departmentId;
+  }
+
+  if (input.patientId) {
+    filter.patientId = input.patientId;
   }
 
   return bills()
@@ -586,6 +594,76 @@ export async function saveOnboardingRequest(
   const result = await onboardingRequests().updateOne(
     { _id: id, updatedAt: expectedUpdatedAt },
     { $set: { ...update, updatedAt } },
+  );
+
+  return result.matchedCount === 1;
+}
+
+export async function insertPatient(patient: PatientDoc): Promise<void> {
+  await patients().insertOne(patient);
+}
+
+export async function findPatientById(id: string): Promise<PatientDoc | null> {
+  return patients().findOne({ _id: id });
+}
+
+export async function findPatientByPhone(
+  facilityId: string,
+  phone: string,
+): Promise<PatientDoc | null> {
+  return patients().findOne({ facilityId, phone });
+}
+
+export async function findPatientByUniqueId(
+  uniqueId: string,
+): Promise<PatientDoc | null> {
+  return patients().findOne({ uniqueId });
+}
+
+export async function searchPatientsByFacility(
+  facilityId: string,
+  term: string,
+): Promise<PatientDoc[]> {
+  return patients()
+    .find({
+      facilityId,
+      $or: [
+        { phone: term },
+        { uniqueId: term.toUpperCase() },
+        { name: { $regex: term, $options: "i" } },
+      ],
+    })
+    .limit(20)
+    .toArray();
+}
+
+export async function insertServiceItem(item: ServiceItemDoc): Promise<void> {
+  await serviceItems().insertOne(item);
+}
+
+export async function findServiceItemById(
+  id: string,
+): Promise<ServiceItemDoc | null> {
+  return serviceItems().findOne({ _id: id });
+}
+
+export async function listServiceItemsByFacility(
+  facilityId: string,
+): Promise<ServiceItemDoc[]> {
+  return serviceItems()
+    .find({ facilityId })
+    .sort({ name: 1 })
+    .toArray();
+}
+
+export async function setServiceItemActive(
+  id: string,
+  active: boolean,
+  updatedAt: string,
+): Promise<boolean> {
+  const result = await serviceItems().updateOne(
+    { _id: id },
+    { $set: { active, updatedAt } },
   );
 
   return result.matchedCount === 1;

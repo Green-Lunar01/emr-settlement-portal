@@ -7,6 +7,8 @@ import type {
   EmrDoc,
   FacilityDoc,
   OnboardingRequestDoc,
+  PatientDoc,
+  ServiceItemDoc,
   SessionDoc,
   TapDoc,
   TopUpDoc,
@@ -135,6 +137,14 @@ export function onboardingRequests(): Collection<OnboardingRequestDoc> {
   return db().collection<OnboardingRequestDoc>("onboarding_requests");
 }
 
+export function patients(): Collection<PatientDoc> {
+  return db().collection<PatientDoc>("patients");
+}
+
+export function serviceItems(): Collection<ServiceItemDoc> {
+  return db().collection<ServiceItemDoc>("service_items");
+}
+
 export async function ensureIndexes(): Promise<void> {
   await users().createIndex({ email: 1 }, { unique: true });
   await users().createIndex({ supervisorIds: 1 });
@@ -155,11 +165,18 @@ export async function ensureIndexes(): Promise<void> {
   );
   await departments().createIndex({ facilityId: 1 });
   await bills().createIndex({ facilityId: 1, createdAt: -1 });
-  await bills().createIndex({ cashierId: 1, createdAt: -1 });
+  await bills().createIndex({ departmentId: 1, createdAt: -1 });
+  await bills().createIndex({ patientId: 1, createdAt: -1 });
   await bills().createIndex(
     { receiptNumber: 1 },
     { unique: true, sparse: true },
   );
   await onboardingRequests().createIndex({ facilityId: 1, status: 1 });
   await onboardingRequests().createIndex({ email: 1 });
+  await patients().createIndex(
+    { facilityId: 1, phone: 1 },
+    { unique: true },
+  );
+  await patients().createIndex({ uniqueId: 1 }, { unique: true });
+  await serviceItems().createIndex({ facilityId: 1, departmentId: 1 });
 }

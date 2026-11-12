@@ -2,7 +2,8 @@ export type UserRole =
   | "finance"
   | "facility_manager"
   | "cashier"
-  | "front_office";
+  | "front_office"
+  | "service_staff";
 
 export type AccountStatus = "active" | "inactive";
 
@@ -20,6 +21,7 @@ export interface User {
   role: UserRole;
   status: AccountStatus;
   hospitalIds: string[];
+  departmentId: string | null;
   createdBy: string | null;
   createdAt: string;
 }

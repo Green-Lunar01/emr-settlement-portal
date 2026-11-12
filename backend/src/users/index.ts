@@ -14,13 +14,16 @@ import {
   type UserDoc,
 } from "../entity";
 import {
+  findDepartment,
   findFacility,
+  findUserById,
   insertAudit,
   insertUser,
   listCashiersInFacilities,
   listStaffInFacilities,
   listSupervisedCashiers,
   listUsersByFacilityAndRole,
+  setUserStatus as saveUserStatus,
 } from "../repository";
 
 async function recordAudit(
@@ -73,6 +76,17 @@ export async function createStaffAccount(
     throw new AppError(404, "The facility was not found.");
   }
 
+  let departmentId: string | null = null;
+
+  if (role === "service_staff") {
+    departmentId = requiredId(body.departmentId, "Choose a department.");
+    const department = await findDepartment(departmentId);
+
+    if (!department || department.facilityId !== facilityId) {
+      throw new AppError(404, "The department was not found.");
+    }
+  }
+
   // A cashier's EMR/wallet/bill submissions are reviewed by whichever
   // finance users are assigned to the same facility, since front office
   // (the account creator) has no financial review role of its own.
@@ -92,6 +106,7 @@ export async function createStaffAccount(
     role,
     status: "active",
     facilityIds: [facilityId],
+    departmentId,
     supervisorIds,
     createdBy: actor._id,
     createdAt: nowIso(),
@@ -133,4 +148,43 @@ export async function listCashiers(actor: UserDoc): Promise<PublicUser[]> {
   }
 
   throw new AppError(403, "You cannot list staff accounts.");
+}
+
+export async function setUserStatus(
+  actor: UserDoc,
+  userId: string,
+  active: boolean,
+): Promise<PublicUser> {
+  if (actor.role !== "front_office") {
+    throw new AppError(403, "Only front office can remove or restore staff.");
+  }
+
+  if (userId === actor._id) {
+    throw new AppError(400, "You cannot change your own account status.");
+  }
+
+  const target = await findUserById(userId);
+
+  if (!target || !target.facilityIds.some((id) => actor.facilityIds.includes(id))) {
+    throw new AppError(404, "The account was not found.");
+  }
+
+  const ok = await saveUserStatus(userId, active ? "active" : "inactive");
+
+  if (!ok) {
+    throw new AppError(409, "The account could not be updated.");
+  }
+
+  await recordAudit(
+    actor,
+    target.facilityIds[0] ?? "",
+    userId,
+    active ? "user.restored" : "user.removed",
+    { email: target.email },
+  );
+
+  return toPublicUser({
+    ...target,
+    status: active ? "active" : "inactive",
+  });
 }

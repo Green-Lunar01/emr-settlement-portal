@@ -20,6 +20,7 @@ export interface ApiUser {
   role: UserRole;
   status: AccountStatus;
   facilityIds: string[];
+  departmentId: string | null;
   createdBy: string | null;
   createdAt: string;
 }
@@ -200,16 +201,47 @@ export interface ApiTransferDetails {
   generatedAt: string;
 }
 
+export interface ApiPatient {
+  id: string;
+  uniqueId: string;
+  facilityId: string;
+  name: string;
+  phone: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface ApiServiceItem {
+  id: string;
+  facilityId: string;
+  departmentId: string;
+  departmentName: string;
+  name: string;
+  price: number;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface ApiBillLineItem {
+  serviceItemId: string;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+}
+
 export interface ApiBill {
   id: string;
   facilityId: string;
   facilityName: string;
   departmentId: string;
   departmentName: string;
-  cashierId: string;
-  cashierName: string;
-  payerName: string;
-  description: string;
+  patientId: string;
+  patientName: string;
+  patientUniqueId: string;
+  raisedBy: string;
+  raisedByName: string;
+  raisedByRole: UserRole;
+  items: ApiBillLineItem[];
   amount: number;
   status: BillStatus;
   paymentMethod: PaymentMethod | null;
@@ -217,8 +249,17 @@ export interface ApiBill {
   paidAt: string | null;
   confirmedByName: string | null;
   receiptNumber: string | null;
+  qrDataUrl: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ApiBillVerification {
+  valid: boolean;
+  receiptNumber: string | null;
+  facilityName: string;
+  amount: number;
+  paidAt: string | null;
 }
 
 export type OnboardingStatus = "Pending" | "Approved" | "Rejected";
@@ -231,6 +272,8 @@ export interface ApiOnboardingRequest {
   role: UserRole;
   facilityId: string;
   facilityName: string;
+  departmentId: string | null;
+  departmentName: string | null;
   status: OnboardingStatus;
   reviewedByName: string | null;
   reviewedAt: string | null;
@@ -260,6 +303,7 @@ export function toLocalUser(user: ApiUser): User {
     role: user.role,
     status: user.status,
     hospitalIds: user.facilityIds,
+    departmentId: user.departmentId,
     createdBy: user.createdBy,
     createdAt: user.createdAt,
   };

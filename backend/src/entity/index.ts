@@ -4,7 +4,8 @@ export type UserRole =
   | "cashier"
   | "facility_manager"
   | "finance"
-  | "front_office";
+  | "front_office"
+  | "service_staff";
 
 export type AccountStatus = "active" | "inactive";
 
@@ -52,6 +53,7 @@ export interface OnboardingRequestDoc {
   passwordHash: string;
   role: UserRole;
   facilityId: string;
+  departmentId: string | null;
   status: OnboardingStatus;
   reviewedBy: string | null;
   reviewedAt: string | null;
@@ -69,6 +71,9 @@ export interface UserDoc {
   role: UserRole;
   status: AccountStatus;
   facilityIds: string[];
+  // Only meaningful for service_staff: the single service point (department)
+  // this account raises and clears bills for.
+  departmentId: string | null;
   supervisorIds: string[];
   createdBy: string | null;
   createdAt: string;
@@ -207,13 +212,44 @@ export interface TransferDetailsDoc {
   generatedAt: string;
 }
 
+export interface PatientDoc {
+  _id: string;
+  uniqueId: string;
+  facilityId: string;
+  name: string;
+  phone: string;
+  email: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ServiceItemDoc {
+  _id: string;
+  facilityId: string;
+  departmentId: string;
+  name: string;
+  priceKobo: number;
+  active: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BillLineItemDoc {
+  serviceItemId: string;
+  name: string;
+  unitPriceKobo: number;
+  quantity: number;
+}
+
 export interface BillDoc {
   _id: string;
   facilityId: string;
   departmentId: string;
-  cashierId: string;
-  payerName: string;
-  description: string;
+  patientId: string;
+  raisedBy: string;
+  raisedByRole: UserRole;
+  items: BillLineItemDoc[];
   amountKobo: number;
   status: BillStatus;
   paymentMethod: PaymentMethod | null;
@@ -239,7 +275,9 @@ export interface AuditDoc {
     | "daily_account"
     | "department"
     | "bill"
-    | "facility";
+    | "facility"
+    | "patient"
+    | "service_item";
   entityId: string;
   iteration: number | null;
   action: string;
@@ -257,6 +295,7 @@ export interface PublicUser {
   role: UserRole;
   status: AccountStatus;
   facilityIds: string[];
+  departmentId: string | null;
   createdBy: string | null;
   createdAt: string;
 }
@@ -381,16 +420,47 @@ export interface PublicDepartment {
   createdAt: string;
 }
 
+export interface PublicPatient {
+  id: string;
+  uniqueId: string;
+  facilityId: string;
+  name: string;
+  phone: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface PublicServiceItem {
+  id: string;
+  facilityId: string;
+  departmentId: string;
+  departmentName: string;
+  name: string;
+  price: number;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface PublicBillLineItem {
+  serviceItemId: string;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+}
+
 export interface PublicBill {
   id: string;
   facilityId: string;
   facilityName: string;
   departmentId: string;
   departmentName: string;
-  cashierId: string;
-  cashierName: string;
-  payerName: string;
-  description: string;
+  patientId: string;
+  patientName: string;
+  patientUniqueId: string;
+  raisedBy: string;
+  raisedByName: string;
+  raisedByRole: UserRole;
+  items: PublicBillLineItem[];
   amount: number;
   status: BillStatus;
   paymentMethod: PaymentMethod | null;
@@ -398,8 +468,17 @@ export interface PublicBill {
   paidAt: string | null;
   confirmedByName: string | null;
   receiptNumber: string | null;
+  qrDataUrl: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PublicBillVerification {
+  valid: boolean;
+  receiptNumber: string | null;
+  facilityName: string;
+  amount: number;
+  paidAt: string | null;
 }
 
 export interface PublicOnboardingRequest {
@@ -410,6 +489,8 @@ export interface PublicOnboardingRequest {
   role: UserRole;
   facilityId: string;
   facilityName: string;
+  departmentId: string | null;
+  departmentName: string | null;
   status: OnboardingStatus;
   reviewedByName: string | null;
   reviewedAt: string | null;
@@ -460,6 +541,15 @@ export function addDays(isoDate: string, days: number): string {
 
 export function koboToNaira(kobo: number): number {
   return kobo / 100;
+}
+
+export function formatNaira(amount: number): string {
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 }
 
 export function parseCount(value: unknown): number {
@@ -673,6 +763,7 @@ export function toPublicUser(user: UserDoc): PublicUser {
     role: user.role,
     status: user.status,
     facilityIds: user.facilityIds,
+    departmentId: user.departmentId,
     createdBy: user.createdBy,
     createdAt: user.createdAt,
   };
@@ -916,7 +1007,8 @@ export function parseStaffRole(value: unknown): UserRole {
     value !== "cashier" &&
     value !== "facility_manager" &&
     value !== "finance" &&
-    value !== "front_office"
+    value !== "front_office" &&
+    value !== "service_staff"
   ) {
     throw new AppError(400, "Select a valid role.");
   }
@@ -928,6 +1020,7 @@ export function toPublicOnboardingRequest(
   request: OnboardingRequestDoc,
   facilityName: string,
   reviewedByName: string | null,
+  departmentName: string | null,
 ): PublicOnboardingRequest {
   return {
     id: request._id,
@@ -937,6 +1030,8 @@ export function toPublicOnboardingRequest(
     role: request.role,
     facilityId: request.facilityId,
     facilityName,
+    departmentId: request.departmentId,
+    departmentName,
     status: request.status,
     reviewedByName,
     reviewedAt: request.reviewedAt,
@@ -945,12 +1040,50 @@ export function toPublicOnboardingRequest(
   };
 }
 
+export function toPublicPatient(patient: PatientDoc): PublicPatient {
+  return {
+    id: patient._id,
+    uniqueId: patient.uniqueId,
+    facilityId: patient.facilityId,
+    name: patient.name,
+    phone: patient.phone,
+    email: patient.email,
+    createdAt: patient.createdAt,
+  };
+}
+
+export function toPublicServiceItem(
+  item: ServiceItemDoc,
+  departmentName: string,
+): PublicServiceItem {
+  return {
+    id: item._id,
+    facilityId: item.facilityId,
+    departmentId: item.departmentId,
+    departmentName,
+    name: item.name,
+    price: koboToNaira(item.priceKobo),
+    active: item.active,
+    createdAt: item.createdAt,
+  };
+}
+
+export function billTotalKobo(items: BillLineItemDoc[]): number {
+  return items.reduce(
+    (total, item) => total + item.unitPriceKobo * item.quantity,
+    0,
+  );
+}
+
 export function toPublicBill(
   bill: BillDoc,
   facilityName: string,
   departmentName: string,
-  cashierName: string,
+  patientName: string,
+  patientUniqueId: string,
+  raisedByName: string,
   confirmedByName: string | null,
+  qrDataUrl: string | null,
 ): PublicBill {
   return {
     id: bill._id,
@@ -958,10 +1091,18 @@ export function toPublicBill(
     facilityName,
     departmentId: bill.departmentId,
     departmentName,
-    cashierId: bill.cashierId,
-    cashierName,
-    payerName: bill.payerName,
-    description: bill.description,
+    patientId: bill.patientId,
+    patientName,
+    patientUniqueId,
+    raisedBy: bill.raisedBy,
+    raisedByName,
+    raisedByRole: bill.raisedByRole,
+    items: bill.items.map((item) => ({
+      serviceItemId: item.serviceItemId,
+      name: item.name,
+      unitPrice: koboToNaira(item.unitPriceKobo),
+      quantity: item.quantity,
+    })),
     amount: koboToNaira(bill.amountKobo),
     status: bill.status,
     paymentMethod: bill.paymentMethod,
@@ -969,6 +1110,7 @@ export function toPublicBill(
     paidAt: bill.paidAt,
     confirmedByName,
     receiptNumber: bill.receiptNumber,
+    qrDataUrl,
     createdAt: bill.createdAt,
     updatedAt: bill.updatedAt,
   };

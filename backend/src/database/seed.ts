@@ -7,10 +7,19 @@ import {
   parseAmountKobo,
   type DepartmentDoc,
   type FacilityDoc,
+  type PatientDoc,
+  type ServiceItemDoc,
   type TapDoc,
   type UserDoc,
 } from "../entity";
-import { departments, facilities, tapRecords, users } from "./index";
+import {
+  departments,
+  facilities,
+  patients,
+  serviceItems,
+  tapRecords,
+  users,
+} from "./index";
 
 const DEMO_PASSWORD = "Lunar123!";
 
@@ -39,6 +48,7 @@ export async function seedIfEmpty(): Promise<boolean> {
       role: "finance",
       status: "active",
       facilityIds: ["facility-lagos", "facility-abuja"],
+      departmentId: null,
       supervisorIds: [],
       createdBy: null,
       createdAt,
@@ -52,6 +62,7 @@ export async function seedIfEmpty(): Promise<boolean> {
       role: "facility_manager",
       status: "active",
       facilityIds: ["facility-lagos"],
+      departmentId: null,
       supervisorIds: [],
       createdBy: "user-finance",
       createdAt,
@@ -65,6 +76,7 @@ export async function seedIfEmpty(): Promise<boolean> {
       role: "cashier",
       status: "active",
       facilityIds: ["facility-lagos"],
+      departmentId: null,
       supervisorIds: ["user-finance"],
       createdBy: "user-finance",
       createdAt,
@@ -78,8 +90,23 @@ export async function seedIfEmpty(): Promise<boolean> {
       role: "front_office",
       status: "active",
       facilityIds: ["facility-lagos"],
+      departmentId: null,
       supervisorIds: [],
       createdBy: "user-finance",
+      createdAt,
+    },
+    {
+      _id: "user-service-staff",
+      name: "Laboratory Staff",
+      phone: "08010000005",
+      email: "lab@lunar.demo",
+      passwordHash: hashPassword(DEMO_PASSWORD),
+      role: "service_staff",
+      status: "active",
+      facilityIds: ["facility-lagos"],
+      departmentId: "dept-laboratory",
+      supervisorIds: [],
+      createdBy: "user-front-office",
       createdAt,
     },
   ];
@@ -137,7 +164,7 @@ export async function seedIfEmpty(): Promise<boolean> {
 
   const departmentDocs: DepartmentDoc[] = [
     {
-      _id: randomUUID(),
+      _id: "dept-consultation",
       facilityId: "facility-lagos",
       name: "Consultation",
       active: true,
@@ -146,7 +173,7 @@ export async function seedIfEmpty(): Promise<boolean> {
       updatedAt: createdAt,
     },
     {
-      _id: randomUUID(),
+      _id: "dept-pharmacy",
       facilityId: "facility-lagos",
       name: "Pharmacy",
       active: true,
@@ -155,7 +182,7 @@ export async function seedIfEmpty(): Promise<boolean> {
       updatedAt: createdAt,
     },
     {
-      _id: randomUUID(),
+      _id: "dept-laboratory",
       facilityId: "facility-lagos",
       name: "Laboratory",
       active: true,
@@ -165,10 +192,72 @@ export async function seedIfEmpty(): Promise<boolean> {
     },
   ];
 
+  const serviceItemDocs: ServiceItemDoc[] = [
+    {
+      _id: randomUUID(),
+      facilityId: "facility-lagos",
+      departmentId: "dept-consultation",
+      name: "General consultation",
+      priceKobo: parseAmountKobo(5_000),
+      active: true,
+      createdBy: "user-front-office",
+      createdAt,
+      updatedAt: createdAt,
+    },
+    {
+      _id: randomUUID(),
+      facilityId: "facility-lagos",
+      departmentId: "dept-laboratory",
+      name: "Malaria test",
+      priceKobo: parseAmountKobo(3_500),
+      active: true,
+      createdBy: "user-front-office",
+      createdAt,
+      updatedAt: createdAt,
+    },
+    {
+      _id: randomUUID(),
+      facilityId: "facility-lagos",
+      departmentId: "dept-laboratory",
+      name: "Full blood count",
+      priceKobo: parseAmountKobo(6_000),
+      active: true,
+      createdBy: "user-front-office",
+      createdAt,
+      updatedAt: createdAt,
+    },
+    {
+      _id: randomUUID(),
+      facilityId: "facility-lagos",
+      departmentId: "dept-pharmacy",
+      name: "Paracetamol (pack)",
+      priceKobo: parseAmountKobo(500),
+      active: true,
+      createdBy: "user-front-office",
+      createdAt,
+      updatedAt: createdAt,
+    },
+  ];
+
+  const patientDocs: PatientDoc[] = [
+    {
+      _id: randomUUID(),
+      uniqueId: "PT-000001",
+      facilityId: "facility-lagos",
+      name: "Chinedu Okafor",
+      phone: "08030000001",
+      email: "patient@lunar.demo",
+      createdBy: "user-cashier",
+      createdAt,
+    },
+  ];
+
   await facilities().insertMany(facilityDocs);
   await users().insertMany(userDocs);
   await tapRecords().insertMany(tapDocs);
   await departments().insertMany(departmentDocs);
+  await serviceItems().insertMany(serviceItemDocs);
+  await patients().insertMany(patientDocs);
 
   return true;
 }

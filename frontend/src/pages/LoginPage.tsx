@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, Moon } from "lucide-react";
+import { ArrowRight, Moon, ShieldCheck } from "lucide-react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "../hooks/useApp";
 import { ROLE_HOME } from "../utils/roles";
@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   if (!sessionReady) {
     return <p className="p-8 text-sm text-lunar-muted">Loading…</p>;
@@ -27,6 +28,7 @@ export default function LoginPage() {
     selectedPassword: string,
   ): Promise<void> {
     setError("");
+    setBusy(true);
 
     try {
       const user = await login(selectedEmail, selectedPassword);
@@ -40,64 +42,84 @@ export default function LoginPage() {
           ? err.message
           : "Unable to sign in. Please try again.",
       );
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
     <main className="grid min-h-screen lg:grid-cols-2">
-      <section className="flex flex-col justify-between bg-lunar-sidebar p-8 text-white lg:p-14">
-        <div className="flex items-center gap-3">
-          <Moon size={32} className="text-emerald-300" />
+      <section className="relative hidden flex-col justify-between overflow-hidden bg-lunar-sidebar p-14 text-white lg:flex">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-40"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 20% 20%, rgba(45,212,191,0.25), transparent 45%), radial-gradient(circle at 80% 70%, rgba(15,157,120,0.3), transparent 50%)",
+          }}
+        />
 
+        <div className="relative flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-lunar-primary to-lunar-accent shadow-raised">
+            <Moon size={22} className="text-white" />
+          </div>
           <div>
-            <p className="text-xl font-bold">Lunar</p>
-            <p className="text-xs tracking-widest text-emerald-200">
-              ACCOUNTING SYSTEM
+            <p className="text-xl font-bold leading-tight">Lunar</p>
+            <p className="text-[11px] font-medium tracking-widest text-white/50">
+              HOSPITAL REVENUE PLATFORM
             </p>
           </div>
         </div>
 
-        <div className="my-12 max-w-lg">
-          <p className="mb-4 text-xs font-semibold tracking-widest text-emerald-300">
-            HOSPITAL ACCOUNTING
+        <div className="relative my-12 max-w-lg">
+          <p className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold tracking-wide text-emerald-200">
+            <ShieldCheck size={14} />
+            Separation of duties, by design
           </p>
 
           <h1 className="text-4xl font-semibold leading-tight lg:text-5xl">
-            Clear records.
+            Every bill accounted for.
             <br />
-            Accountable teams.
+            Every record reviewed.
           </h1>
 
-          <p className="mt-6 leading-relaxed text-emerald-100">
-            Reconcile EMR and TAP records, manage cashier
-            top-ups, and review daily wallet accounts.
+          <p className="mt-6 leading-relaxed text-white/70">
+            Raise bills at the cashier or the point of service, reconcile
+            EMR against TAP, manage wallets, and keep a full audit trail —
+            end to end.
           </p>
         </div>
 
-        <p className="text-sm text-emerald-200">
-          Cashier → Facility Manager → Finance
+        <p className="relative text-sm text-white/50">
+          Cashier / Service Staff → Facility Manager → Finance
         </p>
       </section>
 
-      <section className="flex items-center justify-center p-6 lg:p-12">
+      <section className="flex items-center justify-center bg-lunar-background p-6 lg:bg-white lg:p-12">
         <div className="w-full max-w-md">
-          <h2 className="text-3xl font-semibold">Sign in</h2>
+          <div className="mb-10 flex items-center gap-3 lg:hidden">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-lunar-primary to-lunar-accent">
+              <Moon size={20} className="text-white" />
+            </div>
+            <p className="text-lg font-bold">Lunar</p>
+          </div>
 
-          <p className="mt-3 text-sm text-lunar-muted">
-            Enter the credentials provided for your account.
+          <h2 className="text-3xl font-semibold tracking-tight">Welcome back</h2>
+
+          <p className="mt-2 text-sm text-lunar-muted">
+            Sign in with the credentials provided for your account.
           </p>
 
           <form
             className="mt-8 space-y-5"
             onSubmit={(event) => {
               event.preventDefault();
-              signIn(email, password);
+              void signIn(email, password);
             }}
           >
             <div>
               <label
                 htmlFor="email"
-                className="mb-2 block text-sm font-medium"
+                className="mb-2 block text-sm font-medium text-lunar-text"
               >
                 Email address
               </label>
@@ -112,14 +134,14 @@ export default function LoginPage() {
                   setEmail(event.target.value)
                 }
                 placeholder="you@hospital.com"
-                className="w-full rounded-lg border border-lunar-border bg-white px-4 py-3"
+                className="w-full rounded-xl border border-lunar-border bg-white px-4 py-3 text-sm shadow-card focus:border-lunar-primary"
               />
             </div>
 
             <div>
               <label
                 htmlFor="password"
-                className="mb-2 block text-sm font-medium"
+                className="mb-2 block text-sm font-medium text-lunar-text"
               >
                 Password
               </label>
@@ -133,14 +155,14 @@ export default function LoginPage() {
                 onChange={(event) =>
                   setPassword(event.target.value)
                 }
-                className="w-full rounded-lg border border-lunar-border bg-white px-4 py-3"
+                className="w-full rounded-xl border border-lunar-border bg-white px-4 py-3 text-sm shadow-card focus:border-lunar-primary"
               />
             </div>
 
             {error && (
               <p
                 role="alert"
-                className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
+                className="rounded-xl bg-red-50 p-3 text-sm text-red-700"
               >
                 {error}
               </p>
@@ -148,14 +170,15 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-lunar-primary px-4 py-3 font-medium text-white hover:bg-lunar-primary-dark"
+              disabled={busy}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-lunar-primary px-4 py-3 font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
             >
-              Sign in
+              {busy ? "Signing in…" : "Sign in"}
               <ArrowRight size={18} />
             </button>
           </form>
 
-          <p className="mt-6 text-sm">
+          <p className="mt-6 text-sm text-lunar-text">
             New here?{" "}
             <Link to="/signup" className="font-medium text-lunar-primary">
               Request access
@@ -163,8 +186,7 @@ export default function LoginPage() {
           </p>
 
           <p className="mt-5 text-xs leading-relaxed text-lunar-muted">
-            Front Office reviews every access request before an account
-            is created.
+            An admin reviews every access request before an account is created.
           </p>
         </div>
       </section>

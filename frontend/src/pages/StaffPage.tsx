@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
 
-import { apiRequest, type ApiOnboardingRequest, type ApiUser } from "../api/client";
+import {
+  apiRequest,
+  type ApiDepartment,
+  type ApiOnboardingRequest,
+  type ApiUser,
+} from "../api/client";
 import { useApp } from "../hooks/useApp";
 import { ROLE_LABELS } from "../utils/roles";
 import type { UserRole } from "../types";
@@ -14,6 +19,7 @@ interface CreateForm {
   confirmPassword: string;
   role: UserRole;
   facilityId: string;
+  departmentId: string;
 }
 
 function emptyForm(facilityId: string): CreateForm {
@@ -25,6 +31,7 @@ function emptyForm(facilityId: string): CreateForm {
     confirmPassword: "",
     role: "cashier",
     facilityId,
+    departmentId: "",
   };
 }
 
@@ -42,6 +49,7 @@ export default function StaffPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<CreateForm>(emptyForm(""));
+  const [departments, setDepartments] = useState<ApiDepartment[]>([]);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
@@ -69,6 +77,31 @@ export default function StaffPage() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actor?.id]);
+
+  useEffect(() => {
+    if (!facilityId) return;
+    let cancelled = false;
+
+    async function loadDepartments(): Promise<void> {
+      try {
+        const result = await apiRequest<{ departments: ApiDepartment[] }>(
+          `/api/departments?facilityId=${encodeURIComponent(facilityId)}`,
+        );
+
+        if (!cancelled) {
+          setDepartments(result.departments.filter((d) => d.active));
+        }
+      } catch {
+        // department list is only needed for the service_staff role field
+      }
+    }
+
+    void loadDepartments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [facilityId]);
 
   if (!actor) return null;
 
@@ -133,6 +166,11 @@ export default function StaffPage() {
       return;
     }
 
+    if (form.role === "service_staff" && !form.departmentId) {
+      setError("Select a department for service staff.");
+      return;
+    }
+
     setBusy(true);
 
     try {
@@ -145,6 +183,7 @@ export default function StaffPage() {
           password: form.password,
           role: form.role,
           facilityId: form.facilityId,
+          departmentId: form.role === "service_staff" ? form.departmentId : undefined,
         },
       });
 
@@ -155,6 +194,26 @@ export default function StaffPage() {
       setError(err instanceof Error ? err.message : "Unable to create account.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function toggleStatus(member: ApiUser): Promise<void> {
+    setError("");
+    setMessage("");
+
+    try {
+      await apiRequest(`/api/users/${member.id}/status`, {
+        method: "PATCH",
+        json: { active: member.status !== "active" },
+      });
+      setMessage(
+        member.status === "active"
+          ? `${member.name} removed.`
+          : `${member.name} restored.`,
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update account.");
     }
   }
 
@@ -301,6 +360,7 @@ export default function StaffPage() {
               <th className="px-5 py-4">Contact</th>
               <th className="px-5 py-4">Role</th>
               <th className="px-5 py-4">Status</th>
+              <th className="px-5 py-4">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -322,6 +382,21 @@ export default function StaffPage() {
                   >
                     {member.status}
                   </span>
+                </td>
+                <td className="px-5 py-4">
+                  {member.id !== actor.id && (
+                    <button
+                      type="button"
+                      onClick={() => void toggleStatus(member)}
+                      className={
+                        member.status === "active"
+                          ? "text-sm font-medium text-red-700"
+                          : "text-sm font-medium text-emerald-700"
+                      }
+                    >
+                      {member.status === "active" ? "Remove" : "Restore"}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -391,16 +466,41 @@ export default function StaffPage() {
                 <select
                   value={form.role}
                   onChange={(event) =>
-                    setForm({ ...form, role: event.target.value as UserRole })
+                    setForm({
+                      ...form,
+                      role: event.target.value as UserRole,
+                      departmentId: "",
+                    })
                   }
                   className={inputClass}
                 >
                   <option value="cashier">Cashier (Operations)</option>
+                  <option value="service_staff">Service Staff</option>
                   <option value="facility_manager">Facility Manager</option>
                   <option value="finance">Finance (Auditor)</option>
-                  <option value="front_office">Front Office</option>
+                  <option value="front_office">Admin</option>
                 </select>
               </label>
+              {form.role === "service_staff" && (
+                <label className="block text-sm">
+                  Department (service point)
+                  <select
+                    required
+                    value={form.departmentId}
+                    onChange={(event) =>
+                      setForm({ ...form, departmentId: event.target.value })
+                    }
+                    className={inputClass}
+                  >
+                    <option value="">Select department</option>
+                    {departments.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label className="block text-sm">
                 Facility
                 <select
