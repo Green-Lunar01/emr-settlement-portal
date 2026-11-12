@@ -1,26 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 
+import { apiRequest, type ApiDailyAccount, type WalletReviewStatus } from "../api/client";
 import { useApp } from "../hooks/useApp";
-import type { DailyAccount, WalletReviewRemark } from "../types";
-
-import {
-  calculateWalletSummary,
-  canCashierEditDailyAccount,
-  formatMoney,
-  getToday,
-  roundMoney,
-} from "../utils/accounting";
-
-import {
-  canAccessDailyAccount,
-  confirmCashReceived,
-  getCurrentDailyAccount,
-  reviewDailyAccount,
-  submitDailyAccount,
-} from "../utils/dailyAccount";
-
-import { getTodayWallet } from "../utils/topUp";
+import { formatMoney, roundMoney } from "../utils/accounting";
 
 interface AccountForm {
   bankTransfers: string;
@@ -39,12 +22,11 @@ function emptyForm(): AccountForm {
 }
 
 function Badge({ value }: { value: string }) {
-  const colour =
-    ["Good", "Okay", "Received"].includes(value)
-      ? "bg-emerald-50 text-emerald-700"
-      : value === "Check Record"
-        ? "bg-red-50 text-red-700"
-        : "bg-amber-50 text-amber-700";
+  const colour = ["Good", "Okay", "Received"].includes(value)
+    ? "bg-emerald-50 text-emerald-700"
+    : value === "Check Record"
+      ? "bg-red-50 text-red-700"
+      : "bg-amber-50 text-amber-700";
 
   return (
     <span
@@ -56,7 +38,10 @@ function Badge({ value }: { value: string }) {
 }
 
 export default function DailyAccountsPage() {
-  const { data, currentUser, updateData } = useApp();
+  const { currentUser } = useApp();
+
+  const [accounts, setAccounts] = useState<ApiDailyAccount[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState("");
@@ -64,91 +49,70 @@ export default function DailyAccountsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<AccountForm>(emptyForm);
 
-  const [decision, setDecision] =
-    useState<Exclude<WalletReviewRemark, "Pending">>("Okay");
+  const [decision, setDecision] = useState<Exclude<WalletReviewStatus, "Pending">>(
+    "Okay",
+  );
 
   const [managerComment, setManagerComment] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-
-  if (!currentUser) return null;
+  const [busy, setBusy] = useState(false);
 
   const actor = currentUser;
-  const isCashier = actor.role === "cashier";
-  const isFinance = actor.role === "finance";
-  const isManager = actor.role === "facility_manager";
+  const isCashier = actor?.role === "cashier";
+  const isFinance = actor?.role === "finance";
+  const isManager = actor?.role === "facility_manager";
 
-  const selectedAccount = data.dailyAccounts.find(
-    (account) => account.id === selectedId,
-  );
+  async function load(): Promise<void> {
+    if (!actor) return;
+    setLoading(true);
 
-  const hasLaterAccount = selectedAccount
-    ? data.dailyAccounts.some(
-        (account) =>
-          account.cashierId === selectedAccount.cashierId &&
-          account.hospitalId === selectedAccount.hospitalId &&
-          account.date > selectedAccount.date,
-      )
-    : false;
-
-  const canEdit =
-    isCashier &&
-    !hasLaterAccount &&
-    (!selectedAccount ||
-      canCashierEditDailyAccount(selectedAccount));
-
-  function userName(id: string | null): string {
-    return id
-      ? data.users.find((user) => user.id === id)?.name ??
-          "Unknown user"
-      : "—";
+    try {
+      const result = await apiRequest<{ dailyAccounts: ApiDailyAccount[] }>(
+        "/api/daily-accounts",
+      );
+      setAccounts(result.dailyAccounts);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to load daily accounts.",
+      );
+    } finally {
+      setLoading(false);
+    }
   }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actor?.id]);
+
+  if (!actor) return null;
+
+  const selectedAccount = accounts.find((account) => account.id === selectedId);
+  const canEdit = selectedAccount ? selectedAccount.editable : isCashier;
 
   function reviewTime(value: string | null): string {
     return value
-      ? new Date(value).toLocaleString("en-NG", {
-          timeZone: "Africa/Lagos",
-        })
+      ? new Date(value).toLocaleString("en-NG", { timeZone: "Africa/Lagos" })
       : "Awaiting review";
   }
 
-  const records = data.dailyAccounts
-    .filter((account) =>
-      canAccessDailyAccount(actor, account, data),
-    )
+  const records = accounts
     .filter(
       (account) =>
-        userName(account.cashierId)
+        account.cashierName
           .toLowerCase()
           .includes(search.trim().toLowerCase()) &&
         (!dateFilter || account.date === dateFilter),
     )
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  let previewError = "";
-  let wallet: ReturnType<typeof calculateWalletSummary> | null = null;
-
-  if (selectedAccount) {
-    wallet = calculateWalletSummary(selectedAccount, data.topUps);
-  } else if (isCashier) {
-    try {
-      wallet = getTodayWallet(data, actor);
-    } catch (err) {
-      previewError =
-        err instanceof Error
-          ? err.message
-          : "Unable to calculate wallet totals.";
-    }
-  }
-
   const validFigures = Object.values(form).every(
     (value) =>
       value.trim() !== "" &&
       Number.isFinite(Number(value)) &&
       Number(value) >= 0 &&
-      Math.abs(
-        Number(value) * 100 - Math.round(Number(value) * 100),
-      ) < 0.000001,
+      Math.abs(Number(value) * 100 - Math.round(Number(value) * 100)) < 0.000001,
   );
 
   const previewSpent = validFigures
@@ -160,69 +124,72 @@ export default function DailyAccountsPage() {
     : null;
 
   const previewClosing =
-    wallet && previewSpent !== null
-      ? roundMoney(wallet.totalAvailable - previewSpent)
+    selectedAccount && previewSpent !== null
+      ? roundMoney(selectedAccount.summary.totalAvailable - previewSpent)
       : null;
 
   const previewVariance =
-    previewClosing !== null
-      ? roundMoney(
-          Number(form.actualClosingBalance) - previewClosing,
-        )
+    previewClosing !== null && form.actualClosingBalance.trim() !== ""
+      ? roundMoney(Number(form.actualClosingBalance) - previewClosing)
       : null;
 
-  function openAccount(account?: DailyAccount) {
-    setSelectedId(account?.id ?? null);
+  async function openToday(): Promise<void> {
+    setError("");
+    setMessage("");
 
-    setForm(
-      account
-        ? {
-            bankTransfers: String(account.bankTransfers),
-            cashCollected: String(account.cashCollected),
-            cardPayments: String(account.cardPayments),
-            actualClosingBalance:
-              account.actualClosingBalance === null
-                ? ""
-                : String(account.actualClosingBalance),
-          }
-        : emptyForm(),
-    );
+    try {
+      const account = await apiRequest<ApiDailyAccount>(
+        "/api/daily-accounts/today",
+      );
+      upsertAccount(account);
+      openAccount(account);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to open today's account.",
+      );
+    }
+  }
 
-    const summary = account
-      ? calculateWalletSummary(account, data.topUps)
-      : null;
+  function upsertAccount(account: ApiDailyAccount): void {
+    setAccounts((current) => {
+      const without = current.filter((item) => item.id !== account.id);
+      return [account, ...without].sort((a, b) => b.date.localeCompare(a.date));
+    });
+  }
 
-    const existingRemark = account
-      ? isFinance
-        ? account.financeReview.remark
-        : account.facilityManagerReview.remark
-      : "Pending";
+  function openAccount(account: ApiDailyAccount) {
+    setSelectedId(account.id);
+
+    setForm({
+      bankTransfers: String(account.summary.bankTransfers),
+      cashCollected: String(account.summary.cashCollected),
+      cardPayments: String(account.summary.cardPayments),
+      actualClosingBalance:
+        account.summary.actualClosingBalance === null
+          ? ""
+          : String(account.summary.actualClosingBalance),
+    });
+
+    const existingStatus = isFinance
+      ? account.financeReview.status
+      : account.managerReview.status;
 
     setDecision(
-      existingRemark === "Pending"
-        ? summary?.tallies === true
+      existingStatus === "Pending"
+        ? account.summary.tallies === true
           ? "Okay"
           : "Check Record"
-        : existingRemark,
+        : existingStatus,
     );
 
-    setManagerComment(account?.facilityManagerReview.comment ?? "");
+    setManagerComment(account.managerReview.comment ?? "");
     setError("");
     setMessage("");
     setModalOpen(true);
   }
 
-  function openToday() {
-    openAccount(
-      getCurrentDailyAccount(
-        data,
-        actor.id,
-        actor.hospitalIds[0],
-      ),
-    );
-  }
-
-  function submitFigures() {
+  async function submitFigures(): Promise<void> {
+    if (!selectedAccount) return;
     setError("");
 
     if (!validFigures) {
@@ -230,63 +197,73 @@ export default function DailyAccountsPage() {
       return;
     }
 
+    setBusy(true);
+
     try {
-      updateData((current) =>
-        submitDailyAccount(
-          current,
-          actor,
-          {
+      const updated = await apiRequest<ApiDailyAccount>(
+        `/api/daily-accounts/${selectedAccount.id}`,
+        {
+          method: "PATCH",
+          json: {
             bankTransfers: Number(form.bankTransfers),
             cashCollected: Number(form.cashCollected),
             cardPayments: Number(form.cardPayments),
             actualClosingBalance: Number(form.actualClosingBalance),
           },
-          selectedId ?? undefined,
-        ),
+        },
       );
 
+      upsertAccount(updated);
       setModalOpen(false);
       setMessage("Daily account submitted for review.");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Unable to submit.",
-      );
+      setError(err instanceof Error ? err.message : "Unable to submit.");
+    } finally {
+      setBusy(false);
     }
   }
 
-  function saveReview() {
+  async function saveReview(): Promise<void> {
     if (!selectedAccount) return;
     setError("");
+    setBusy(true);
 
     try {
-      updateData((current) =>
-        reviewDailyAccount(
-          current,
-          actor,
-          selectedAccount.id,
-          decision,
-          isManager ? managerComment : "",
-        ),
+      const updated = await apiRequest<ApiDailyAccount>(
+        `/api/daily-accounts/${selectedAccount.id}/review`,
+        {
+          method: "POST",
+          json: {
+            status: decision,
+            comment: isManager ? managerComment : undefined,
+          },
+        },
       );
 
+      upsertAccount(updated);
       setModalOpen(false);
       setMessage(`Review saved: ${decision}.`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Unable to save review.",
       );
+    } finally {
+      setBusy(false);
     }
   }
 
-  function receiveCash() {
+  async function receiveCash(): Promise<void> {
     if (!selectedAccount) return;
     setError("");
+    setBusy(true);
 
     try {
-      updateData((current) =>
-        confirmCashReceived(current, actor, selectedAccount.id),
+      const updated = await apiRequest<ApiDailyAccount>(
+        `/api/daily-accounts/${selectedAccount.id}/cash-receipt`,
+        { method: "POST" },
       );
 
+      upsertAccount(updated);
       setModalOpen(false);
       setMessage("Cash receipt confirmed by Finance.");
     } catch (err) {
@@ -295,6 +272,8 @@ export default function DailyAccountsPage() {
           ? err.message
           : "Unable to confirm cash receipt.",
       );
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -312,9 +291,7 @@ export default function DailyAccountsPage() {
           step="0.01"
           value={form[key]}
           disabled={!canEdit}
-          onChange={(event) =>
-            setForm({ ...form, [key]: event.target.value })
-          }
+          onChange={(event) => setForm({ ...form, [key]: event.target.value })}
           className={inputClass}
         />
       </label>
@@ -325,9 +302,7 @@ export default function DailyAccountsPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">
-            Daily Wallet Accounts
-          </h1>
+          <h1 className="text-2xl font-semibold">Daily Wallet Accounts</h1>
           <p className="mt-2 text-sm text-lunar-muted">
             Account for collections and compare expected and actual balances.
           </p>
@@ -336,7 +311,7 @@ export default function DailyAccountsPage() {
         {isCashier && (
           <button
             type="button"
-            onClick={openToday}
+            onClick={() => void openToday()}
             className="flex items-center gap-2 rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white"
           >
             <Plus size={18} />
@@ -354,13 +329,16 @@ export default function DailyAccountsPage() {
         </p>
       )}
 
+      {error && !modalOpen && (
+        <p role="alert" className="mt-5 rounded-lg bg-red-50 p-4 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+
       <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white">
         <div className="flex flex-wrap gap-3 border-b border-lunar-border p-4">
           <div className="relative min-w-48 flex-1">
-            <Search
-              size={17}
-              className="absolute left-3 top-3 text-lunar-muted"
-            />
+            <Search size={17} className="absolute left-3 top-3 text-lunar-muted" />
             <input
               aria-label="Search cashier name"
               placeholder="Search cashier name"
@@ -421,105 +399,87 @@ export default function DailyAccountsPage() {
             </thead>
 
             <tbody>
-              {records.map((account) => {
-                const summary = calculateWalletSummary(
-                  account,
-                  data.topUps,
-                );
+              {records.map((account) => (
+                <tr key={account.id} className="border-t border-lunar-border">
+                  <td className="px-4 py-4">
+                    <p className="font-medium">{account.cashierName}</p>
+                    <p className="mt-1 text-xs text-lunar-muted">{account.date}</p>
+                  </td>
 
-                return (
-                  <tr
-                    key={account.id}
-                    className="border-t border-lunar-border"
-                  >
-                    <td className="px-4 py-4">
-                      <p className="font-medium">
-                        {userName(account.cashierId)}
-                      </p>
-                      <p className="mt-1 text-xs text-lunar-muted">
-                        {account.date}
-                      </p>
+                  {[
+                    account.summary.openingBalance,
+                    account.summary.totalTopUps,
+                    account.summary.totalAvailable,
+                    account.summary.bankTransfers,
+                    account.summary.cashCollected,
+                    account.summary.cardPayments,
+                    account.summary.totalSpent,
+                    account.summary.expectedClosingBalance,
+                  ].map((value, index) => (
+                    <td key={index} className="px-4 py-4">
+                      {formatMoney(value)}
                     </td>
+                  ))}
 
-                    {[
-                      summary.openingBalance,
-                      summary.totalTopUps,
-                      summary.totalAvailable,
-                      account.bankTransfers,
-                      account.cashCollected,
-                      account.cardPayments,
-                      summary.totalSpent,
-                      summary.expectedClosingBalance,
-                    ].map((value, index) => (
-                      <td key={index} className="px-4 py-4">
-                        {formatMoney(value)}
-                      </td>
-                    ))}
+                  <td className="px-4 py-4">
+                    {account.summary.actualClosingBalance === null
+                      ? "Not entered"
+                      : formatMoney(account.summary.actualClosingBalance)}
+                  </td>
 
-                    <td className="px-4 py-4">
-                      {summary.actualClosingBalance === null
-                        ? "Not entered"
-                        : formatMoney(summary.actualClosingBalance)}
-                    </td>
+                  <td className="px-4 py-4">
+                    <Badge
+                      value={
+                        account.summary.tallies === null
+                          ? "Awaiting figures"
+                          : account.summary.tallies
+                            ? "Good"
+                            : "Check Record"
+                      }
+                    />
+                  </td>
 
-                    <td className="px-4 py-4">
+                  <td className="px-4 py-4">{account.status}</td>
+
+                  <td className="px-4 py-4">
+                    <Badge value={account.managerReview.status} />
+                  </td>
+
+                  <td className="min-w-48 max-w-72 whitespace-pre-wrap break-words px-4 py-4 text-xs">
+                    {account.managerReview.comment || "—"}
+                  </td>
+
+                  <td className="px-4 py-4">
+                    <Badge value={account.financeReview.status} />
+                  </td>
+
+                  <td className="px-4 py-4">
+                    {account.summary.cashCollected === 0 ? (
+                      "No cash collected"
+                    ) : (
                       <Badge
                         value={
-                          summary.tallies === null
-                            ? "Awaiting figures"
-                            : summary.tallies
-                              ? "Good"
-                              : "Check Record"
+                          account.cashReceipt.confirmed ? "Received" : "Pending"
                         }
                       />
-                    </td>
+                    )}
+                  </td>
 
-                    <td className="px-4 py-4">{account.status}</td>
-
-                    <td className="px-4 py-4">
-                      <Badge
-                        value={account.facilityManagerReview.remark}
-                      />
-                    </td>
-
-                    <td className="min-w-48 max-w-72 whitespace-pre-wrap break-words px-4 py-4 text-xs">
-                      {account.facilityManagerReview.comment || "—"}
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <Badge value={account.financeReview.remark} />
-                    </td>
-
-                    <td className="px-4 py-4">
-                      {account.cashCollected === 0 ? (
-                        "No cash collected"
-                      ) : (
-                        <Badge
-                          value={
-                            account.cashReceipt.confirmed
-                              ? "Received"
-                              : "Pending"
-                          }
-                        />
-                      )}
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <button
-                        type="button"
-                        onClick={() => openAccount(account)}
-                        className="font-medium text-lunar-primary"
-                      >
-                        {isCashier ? "Open" : "Review"}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+                  <td className="px-4 py-4">
+                    <button
+                      type="button"
+                      onClick={() => openAccount(account)}
+                      className="font-medium text-lunar-primary"
+                    >
+                      {isCashier ? "Open" : "Review"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
 
-          {records.length === 0 && (
+          {!loading && records.length === 0 && (
             <p className="p-8 text-center text-sm text-lunar-muted">
               No daily accounts match your filters.
             </p>
@@ -527,7 +487,7 @@ export default function DailyAccountsPage() {
         </div>
       </section>
 
-      {modalOpen && (
+      {modalOpen && selectedAccount && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <section
             role="dialog"
@@ -536,10 +496,7 @@ export default function DailyAccountsPage() {
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6"
           >
             <div className="flex items-center justify-between gap-4">
-              <h2
-                id="daily-account-title"
-                className="text-xl font-semibold"
-              >
+              <h2 id="daily-account-title" className="text-xl font-semibold">
                 Daily wallet account
               </h2>
               <button
@@ -552,44 +509,31 @@ export default function DailyAccountsPage() {
             </div>
 
             <p className="mt-2 text-sm text-lunar-muted">
-              {selectedAccount
-                ? userName(selectedAccount.cashierId)
-                : actor.name}
+              {selectedAccount.cashierName}
               {" · "}
-              {selectedAccount?.date ?? getToday()}
+              {selectedAccount.date}
             </p>
 
-            {previewError && (
-              <p
-                role="alert"
-                className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800"
-              >
-                {previewError}
-              </p>
-            )}
-
-            {wallet && (
-              <div className="mt-5 grid gap-3 rounded-lg bg-lunar-background p-4 sm:grid-cols-3">
-                {[
-                  ["Previous balance", wallet.openingBalance],
-                  ["Today's top-ups", wallet.totalTopUps],
-                  ["Total available", wallet.totalAvailable],
-                ].map(([label, value]) => (
-                  <div key={String(label)}>
-                    <p className="text-xs text-lunar-muted">{label}</p>
-                    <p className="mt-2 font-semibold">
-                      {formatMoney(Number(value))}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="mt-5 grid gap-3 rounded-lg bg-lunar-background p-4 sm:grid-cols-3">
+              {[
+                ["Previous balance", selectedAccount.summary.openingBalance],
+                ["Today's top-ups", selectedAccount.summary.totalTopUps],
+                ["Total available", selectedAccount.summary.totalAvailable],
+              ].map(([label, value]) => (
+                <div key={String(label)}>
+                  <p className="text-xs text-lunar-muted">{label}</p>
+                  <p className="mt-2 font-semibold">
+                    {formatMoney(Number(value))}
+                  </p>
+                </div>
+              ))}
+            </div>
 
             <form
               className="mt-5 space-y-5"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (canEdit) submitFigures();
+                if (canEdit) void submitFigures();
               }}
             >
               <div className="grid gap-4 sm:grid-cols-2">
@@ -606,18 +550,14 @@ export default function DailyAccountsPage() {
                 <p className="text-sm">
                   Total spent:{" "}
                   <strong>
-                    {previewSpent === null
-                      ? "—"
-                      : formatMoney(previewSpent)}
+                    {previewSpent === null ? "—" : formatMoney(previewSpent)}
                   </strong>
                 </p>
 
                 <p className="mt-2 text-sm">
                   Expected wallet balance:{" "}
                   <strong>
-                    {previewClosing === null
-                      ? "—"
-                      : formatMoney(previewClosing)}
+                    {previewClosing === null ? "—" : formatMoney(previewClosing)}
                   </strong>
                 </p>
 
@@ -650,7 +590,7 @@ export default function DailyAccountsPage() {
               {canEdit && (
                 <button
                   type="submit"
-                  disabled={!wallet}
+                  disabled={busy}
                   className="rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
                 >
                   Submit daily account
@@ -659,60 +599,50 @@ export default function DailyAccountsPage() {
 
               {isCashier && !canEdit && (
                 <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-                  {hasLaterAccount
+                  {selectedAccount.hasLaterAccount
                     ? "A later wallet day exists, so these figures are fixed."
                     : "Submitted figures are locked until a reviewer returns the account with Check Record."}
                 </p>
               )}
             </form>
 
-            {selectedAccount && (
-              <section className="mt-6 grid gap-4 border-t border-lunar-border pt-5 sm:grid-cols-2">
-                <div>
-                  <p className="mb-2 text-sm font-medium">
-                    Facility Manager
-                  </p>
-                  <Badge
-                    value={selectedAccount.facilityManagerReview.remark}
-                  />
-                  <p className="mt-2 text-xs text-lunar-muted">
-                    {userName(
-                      selectedAccount.facilityManagerReview.reviewedBy,
-                    )}
-                  </p>
-                  <p className="mt-1 text-xs text-lunar-muted">
-                    {reviewTime(
-                      selectedAccount.facilityManagerReview.reviewedAt,
-                    )}
-                  </p>
+            <section className="mt-6 grid gap-4 border-t border-lunar-border pt-5 sm:grid-cols-2">
+              <div>
+                <p className="mb-2 text-sm font-medium">Facility Manager</p>
+                <Badge value={selectedAccount.managerReview.status} />
+                <p className="mt-2 text-xs text-lunar-muted">
+                  {selectedAccount.managerReview.reviewedByName ?? "—"}
+                </p>
+                <p className="mt-1 text-xs text-lunar-muted">
+                  {reviewTime(selectedAccount.managerReview.reviewedAt)}
+                </p>
 
-                  {selectedAccount.facilityManagerReview.comment && (
-                    <p className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-lunar-background p-3 text-sm">
-                      <strong>Manager comment: </strong>
-                      {selectedAccount.facilityManagerReview.comment}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <p className="mb-2 text-sm font-medium">Finance</p>
-                  <Badge value={selectedAccount.financeReview.remark} />
-                  <p className="mt-2 text-xs text-lunar-muted">
-                    {userName(selectedAccount.financeReview.reviewedBy)}
+                {selectedAccount.managerReview.comment && (
+                  <p className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-lunar-background p-3 text-sm">
+                    <strong>Manager comment: </strong>
+                    {selectedAccount.managerReview.comment}
                   </p>
-                  <p className="mt-1 text-xs text-lunar-muted">
-                    {reviewTime(selectedAccount.financeReview.reviewedAt)}
-                  </p>
-                </div>
-              </section>
-            )}
+                )}
+              </div>
 
-            {!isCashier && selectedAccount && (
+              <div>
+                <p className="mb-2 text-sm font-medium">Finance</p>
+                <Badge value={selectedAccount.financeReview.status} />
+                <p className="mt-2 text-xs text-lunar-muted">
+                  {selectedAccount.financeReview.reviewedByName ?? "—"}
+                </p>
+                <p className="mt-1 text-xs text-lunar-muted">
+                  {reviewTime(selectedAccount.financeReview.reviewedAt)}
+                </p>
+              </div>
+            </section>
+
+            {!isCashier && (
               <form
                 className="mt-6 space-y-4 border-t border-lunar-border pt-5"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  saveReview();
+                  void saveReview();
                 }}
               >
                 <label className="block text-sm font-medium">
@@ -721,10 +651,7 @@ export default function DailyAccountsPage() {
                     value={decision}
                     onChange={(event) =>
                       setDecision(
-                        event.target.value as Exclude<
-                          WalletReviewRemark,
-                          "Pending"
-                        >,
+                        event.target.value as Exclude<WalletReviewStatus, "Pending">,
                       )
                     }
                     className={inputClass}
@@ -740,9 +667,7 @@ export default function DailyAccountsPage() {
                     <textarea
                       rows={4}
                       value={managerComment}
-                      onChange={(event) =>
-                        setManagerComment(event.target.value)
-                      }
+                      onChange={(event) => setManagerComment(event.target.value)}
                       placeholder="Enter observations about collections, balances, or discrepancies."
                       className={inputClass}
                     />
@@ -751,19 +676,19 @@ export default function DailyAccountsPage() {
 
                 <button
                   type="submit"
-                  className="rounded-lg bg-lunar-primary px-4 py-2.5 text-sm text-white"
+                  disabled={busy}
+                  className="rounded-lg bg-lunar-primary px-4 py-2.5 text-sm text-white disabled:opacity-60"
                 >
                   Save review
                 </button>
               </form>
             )}
 
-            {isFinance && selectedAccount && (
+            {isFinance && (
               <section className="mt-6 border-t border-lunar-border pt-5">
                 <h3 className="font-semibold">Cash receipt</h3>
                 <p className="mt-2 text-sm">
-                  Cash collected:{" "}
-                  {formatMoney(selectedAccount.cashCollected)}
+                  Cash collected: {formatMoney(selectedAccount.summary.cashCollected)}
                 </p>
 
                 {selectedAccount.cashReceipt.confirmed ? (
@@ -771,16 +696,17 @@ export default function DailyAccountsPage() {
                     <Badge value="Received" />
                     <p className="mt-2 text-xs text-lunar-muted">
                       Confirmed by{" "}
-                      {userName(selectedAccount.cashReceipt.confirmedBy)}
+                      {selectedAccount.cashReceipt.confirmedByName ?? "—"}
                       {" · "}
                       {reviewTime(selectedAccount.cashReceipt.confirmedAt)}
                     </p>
                   </div>
-                ) : selectedAccount.cashCollected > 0 ? (
+                ) : selectedAccount.summary.cashCollected > 0 ? (
                   <button
                     type="button"
-                    onClick={receiveCash}
-                    className="mt-3 rounded-lg border border-lunar-primary px-4 py-2.5 text-sm font-medium text-lunar-primary"
+                    disabled={busy}
+                    onClick={() => void receiveCash()}
+                    className="mt-3 rounded-lg border border-lunar-primary px-4 py-2.5 text-sm font-medium text-lunar-primary disabled:opacity-60"
                   >
                     Confirm cash received
                   </button>

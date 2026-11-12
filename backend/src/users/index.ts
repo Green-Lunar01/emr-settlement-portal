@@ -6,6 +6,7 @@ import {
   nowIso,
   parseEmail,
   parsePassword,
+  parseStaffRole,
   requiredId,
   requiredText,
   toPublicUser,
@@ -17,7 +18,9 @@ import {
   insertAudit,
   insertUser,
   listCashiersInFacilities,
+  listStaffInFacilities,
   listSupervisedCashiers,
+  listUsersByFacilityAndRole,
 } from "../repository";
 
 async function recordAudit(
@@ -44,15 +47,16 @@ async function recordAudit(
   });
 }
 
-export async function createCashier(
+export async function createStaffAccount(
   actor: UserDoc,
   input: unknown,
 ): Promise<PublicUser> {
-  if (actor.role !== "finance") {
-    throw new AppError(403, "Only finance can create cashier accounts.");
+  if (actor.role !== "front_office") {
+    throw new AppError(403, "Only front office can create staff accounts.");
   }
 
   const body = asObject(input);
+  const role = parseStaffRole(body.role);
   const name = requiredText(body.name, "Name", 120);
   const phone = requiredText(body.phone, "Phone", 30);
   const email = parseEmail(body.email);
@@ -60,7 +64,7 @@ export async function createCashier(
   const facilityId = requiredId(body.facilityId, "Choose a facility.");
 
   if (!actor.facilityIds.includes(facilityId)) {
-    throw new AppError(403, "You cannot create a cashier for this facility.");
+    throw new AppError(403, "You cannot create an account for this facility.");
   }
 
   const facility = await findFacility(facilityId);
@@ -69,22 +73,32 @@ export async function createCashier(
     throw new AppError(404, "The facility was not found.");
   }
 
-  const cashier: UserDoc = {
+  // A cashier's EMR/wallet/bill submissions are reviewed by whichever
+  // finance users are assigned to the same facility, since front office
+  // (the account creator) has no financial review role of its own.
+  const supervisorIds =
+    role === "cashier"
+      ? (await listUsersByFacilityAndRole(facilityId, "finance")).map(
+          (user) => user._id,
+        )
+      : [];
+
+  const staff: UserDoc = {
     _id: randomUUID(),
     name,
     phone,
     email,
     passwordHash: hashPassword(password),
-    role: "cashier",
+    role,
     status: "active",
     facilityIds: [facilityId],
-    supervisorIds: [actor._id],
+    supervisorIds,
     createdBy: actor._id,
     createdAt: nowIso(),
   };
 
   try {
-    await insertUser(cashier);
+    await insertUser(staff);
   } catch (error) {
     if (isDuplicateKey(error)) {
       throw new AppError(409, "An account with this email already exists.");
@@ -93,13 +107,13 @@ export async function createCashier(
     throw error;
   }
 
-  await recordAudit(actor, facilityId, cashier._id, "cashier.created", {
+  await recordAudit(actor, facilityId, staff._id, `${role}.created`, {
     name,
     email,
     facilityId,
   });
 
-  return toPublicUser(cashier);
+  return toPublicUser(staff);
 }
 
 export async function listCashiers(actor: UserDoc): Promise<PublicUser[]> {
@@ -113,5 +127,10 @@ export async function listCashiers(actor: UserDoc): Promise<PublicUser[]> {
     return cashiers.map(toPublicUser);
   }
 
-  throw new AppError(403, "You cannot list cashier accounts.");
+  if (actor.role === "front_office") {
+    const staff = await listStaffInFacilities(actor.facilityIds);
+    return staff.map(toPublicUser);
+  }
+
+  throw new AppError(403, "You cannot list staff accounts.");
 }

@@ -1,6 +1,10 @@
 import { AppError } from "../errors";
 
-export type UserRole = "cashier" | "facility_manager" | "finance";
+export type UserRole =
+  | "cashier"
+  | "facility_manager"
+  | "finance"
+  | "front_office";
 
 export type AccountStatus = "active" | "inactive";
 
@@ -21,9 +25,39 @@ export type RecordStage =
   | "Finance Review"
   | "Completed";
 
+export type WalletReviewStatus = "Pending" | "Okay" | "Check Record";
+
+export type WalletDecision = Exclude<WalletReviewStatus, "Pending">;
+
+export type PaymentMethod = "Transfer" | "POS" | "Cash";
+
+export type BillStatus =
+  | "Draft"
+  | "Awaiting Transfer"
+  | "Awaiting Confirmation"
+  | "Paid";
+
+export type OnboardingStatus = "Pending" | "Approved" | "Rejected";
+
 export interface FacilityDoc {
   _id: string;
   name: string;
+}
+
+export interface OnboardingRequestDoc {
+  _id: string;
+  name: string;
+  phone: string;
+  email: string;
+  passwordHash: string;
+  role: UserRole;
+  facilityId: string;
+  status: OnboardingStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface UserDoc {
@@ -112,13 +146,100 @@ export interface TapDoc {
   updatedAt: string;
 }
 
+export interface CashReceiptDoc {
+  confirmed: boolean;
+  confirmedBy: string | null;
+  confirmedAt: string | null;
+}
+
+export interface WalletReviewDoc {
+  status: WalletReviewStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  comment: string | null;
+}
+
+export interface TopUpDoc {
+  _id: string;
+  facilityId: string;
+  cashierId: string;
+  date: string;
+  amountKobo: number;
+  issuedBy: string;
+  issuedAt: string;
+  acknowledged: boolean;
+  acknowledgedAt: string | null;
+}
+
+export interface DailyAccountDoc {
+  _id: string;
+  facilityId: string;
+  cashierId: string;
+  date: string;
+  openingBalanceKobo: number;
+  bankTransfersKobo: number;
+  cashCollectedKobo: number;
+  cardPaymentsKobo: number;
+  actualClosingBalanceKobo: number | null;
+  status: SubmissionStatus;
+  submittedAt: string | null;
+  managerReview: WalletReviewDoc;
+  financeReview: WalletReviewDoc;
+  cashReceipt: CashReceiptDoc;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DepartmentDoc {
+  _id: string;
+  facilityId: string;
+  name: string;
+  active: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TransferDetailsDoc {
+  accountNumber: string;
+  bankName: string;
+  reference: string;
+  generatedAt: string;
+}
+
+export interface BillDoc {
+  _id: string;
+  facilityId: string;
+  departmentId: string;
+  cashierId: string;
+  payerName: string;
+  description: string;
+  amountKobo: number;
+  status: BillStatus;
+  paymentMethod: PaymentMethod | null;
+  transfer: TransferDetailsDoc | null;
+  paidAt: string | null;
+  confirmedBy: string | null;
+  receiptNumber: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AuditDoc {
   _id: string;
   actorId: string;
   actorName: string;
   actorRole: UserRole;
   facilityId: string;
-  entityType: "emr" | "user" | "tap";
+  entityType:
+    | "emr"
+    | "user"
+    | "tap"
+    | "top_up"
+    | "daily_account"
+    | "department"
+    | "bill"
+    | "facility";
   entityId: string;
   iteration: number | null;
   action: string;
@@ -187,6 +308,113 @@ export interface PublicTap {
   date: string;
   transactionCount: number;
   transactionAmount: number;
+}
+
+export interface PublicTopUp {
+  id: string;
+  facilityId: string;
+  facilityName: string;
+  cashierId: string;
+  cashierName: string;
+  date: string;
+  amount: number;
+  issuedBy: string;
+  issuedByName: string;
+  issuedAt: string;
+  acknowledged: boolean;
+  acknowledgedAt: string | null;
+}
+
+export interface PublicWalletReview {
+  status: WalletReviewStatus;
+  reviewedBy: string | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  comment: string | null;
+}
+
+export interface PublicCashReceipt {
+  confirmed: boolean;
+  confirmedBy: string | null;
+  confirmedByName: string | null;
+  confirmedAt: string | null;
+}
+
+export interface PublicWalletSummary {
+  openingBalance: number;
+  totalTopUps: number;
+  totalAvailable: number;
+  bankTransfers: number;
+  cashCollected: number;
+  cardPayments: number;
+  totalSpent: number;
+  expectedClosingBalance: number;
+  actualClosingBalance: number | null;
+  variance: number | null;
+  tallies: boolean | null;
+}
+
+export interface PublicDailyAccount {
+  id: string;
+  facilityId: string;
+  facilityName: string;
+  cashierId: string;
+  cashierName: string;
+  date: string;
+  status: SubmissionStatus;
+  submittedAt: string | null;
+  editable: boolean;
+  hasLaterAccount: boolean;
+  summary: PublicWalletSummary;
+  managerReview: PublicWalletReview;
+  financeReview: PublicWalletReview;
+  cashReceipt: PublicCashReceipt;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicDepartment {
+  id: string;
+  facilityId: string;
+  name: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface PublicBill {
+  id: string;
+  facilityId: string;
+  facilityName: string;
+  departmentId: string;
+  departmentName: string;
+  cashierId: string;
+  cashierName: string;
+  payerName: string;
+  description: string;
+  amount: number;
+  status: BillStatus;
+  paymentMethod: PaymentMethod | null;
+  transfer: TransferDetailsDoc | null;
+  paidAt: string | null;
+  confirmedByName: string | null;
+  receiptNumber: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicOnboardingRequest {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  role: UserRole;
+  facilityId: string;
+  facilityName: string;
+  status: OnboardingStatus;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
 }
 
 export interface PublicAudit {
@@ -574,4 +802,196 @@ export function lockMessage(iteration: IterationDoc): string {
   }
 
   return "This record is locked after facility manager review.";
+}
+
+export function pendingWalletReview(): WalletReviewDoc {
+  return {
+    status: "Pending",
+    reviewedBy: null,
+    reviewedAt: null,
+    comment: null,
+  };
+}
+
+export function parseWalletDecision(value: unknown): WalletDecision {
+  if (value !== "Okay" && value !== "Check Record") {
+    throw new AppError(400, "Select a valid review decision.");
+  }
+
+  return value;
+}
+
+// A manager/finance "Check Record" reopens the account for the cashier even
+// though its status has already been reset to "Draft" by that review.
+export function dailyAccountEditable(account: DailyAccountDoc): boolean {
+  if (
+    account.managerReview.status === "Check Record" ||
+    account.financeReview.status === "Check Record"
+  ) {
+    return true;
+  }
+
+  return account.status === "Draft";
+}
+
+export interface WalletTotalsKobo {
+  totalAvailableKobo: number;
+  totalSpentKobo: number;
+  expectedClosingBalanceKobo: number;
+  varianceKobo: number | null;
+  tallies: boolean | null;
+}
+
+export function walletTotals(
+  account: DailyAccountDoc,
+  topUpsKobo: number,
+): WalletTotalsKobo {
+  const totalAvailableKobo = account.openingBalanceKobo + topUpsKobo;
+  const totalSpentKobo =
+    account.bankTransfersKobo +
+    account.cashCollectedKobo +
+    account.cardPaymentsKobo;
+  const expectedClosingBalanceKobo = totalAvailableKobo - totalSpentKobo;
+  const varianceKobo =
+    account.actualClosingBalanceKobo === null
+      ? null
+      : account.actualClosingBalanceKobo - expectedClosingBalanceKobo;
+
+  return {
+    totalAvailableKobo,
+    totalSpentKobo,
+    expectedClosingBalanceKobo,
+    varianceKobo,
+    tallies: varianceKobo === null ? null : varianceKobo === 0,
+  };
+}
+
+export function toPublicWalletSummary(
+  account: DailyAccountDoc,
+  topUpsKobo: number,
+): PublicWalletSummary {
+  const totals = walletTotals(account, topUpsKobo);
+
+  return {
+    openingBalance: koboToNaira(account.openingBalanceKobo),
+    totalTopUps: koboToNaira(topUpsKobo),
+    totalAvailable: koboToNaira(totals.totalAvailableKobo),
+    bankTransfers: koboToNaira(account.bankTransfersKobo),
+    cashCollected: koboToNaira(account.cashCollectedKobo),
+    cardPayments: koboToNaira(account.cardPaymentsKobo),
+    totalSpent: koboToNaira(totals.totalSpentKobo),
+    expectedClosingBalance: koboToNaira(totals.expectedClosingBalanceKobo),
+    actualClosingBalance:
+      account.actualClosingBalanceKobo === null
+        ? null
+        : koboToNaira(account.actualClosingBalanceKobo),
+    variance:
+      totals.varianceKobo === null ? null : koboToNaira(totals.varianceKobo),
+    tallies: totals.tallies,
+  };
+}
+
+export function parsePaymentMethod(value: unknown): PaymentMethod {
+  if (value !== "Transfer" && value !== "POS" && value !== "Cash") {
+    throw new AppError(400, "Select a valid payment method.");
+  }
+
+  return value;
+}
+
+export function toPublicDepartment(
+  department: DepartmentDoc,
+): PublicDepartment {
+  return {
+    id: department._id,
+    facilityId: department.facilityId,
+    name: department.name,
+    active: department.active,
+    createdAt: department.createdAt,
+  };
+}
+
+export function parseStaffRole(value: unknown): UserRole {
+  if (
+    value !== "cashier" &&
+    value !== "facility_manager" &&
+    value !== "finance" &&
+    value !== "front_office"
+  ) {
+    throw new AppError(400, "Select a valid role.");
+  }
+
+  return value;
+}
+
+export function toPublicOnboardingRequest(
+  request: OnboardingRequestDoc,
+  facilityName: string,
+  reviewedByName: string | null,
+): PublicOnboardingRequest {
+  return {
+    id: request._id,
+    name: request.name,
+    phone: request.phone,
+    email: request.email,
+    role: request.role,
+    facilityId: request.facilityId,
+    facilityName,
+    status: request.status,
+    reviewedByName,
+    reviewedAt: request.reviewedAt,
+    rejectionReason: request.rejectionReason,
+    createdAt: request.createdAt,
+  };
+}
+
+export function toPublicBill(
+  bill: BillDoc,
+  facilityName: string,
+  departmentName: string,
+  cashierName: string,
+  confirmedByName: string | null,
+): PublicBill {
+  return {
+    id: bill._id,
+    facilityId: bill.facilityId,
+    facilityName,
+    departmentId: bill.departmentId,
+    departmentName,
+    cashierId: bill.cashierId,
+    cashierName,
+    payerName: bill.payerName,
+    description: bill.description,
+    amount: koboToNaira(bill.amountKobo),
+    status: bill.status,
+    paymentMethod: bill.paymentMethod,
+    transfer: bill.transfer,
+    paidAt: bill.paidAt,
+    confirmedByName,
+    receiptNumber: bill.receiptNumber,
+    createdAt: bill.createdAt,
+    updatedAt: bill.updatedAt,
+  };
+}
+
+export function toPublicTopUp(
+  topUp: TopUpDoc,
+  cashierName: string,
+  issuedByName: string,
+  facilityName: string,
+): PublicTopUp {
+  return {
+    id: topUp._id,
+    facilityId: topUp.facilityId,
+    facilityName,
+    cashierId: topUp.cashierId,
+    cashierName,
+    date: topUp.date,
+    amount: koboToNaira(topUp.amountKobo),
+    issuedBy: topUp.issuedBy,
+    issuedByName,
+    issuedAt: topUp.issuedAt,
+    acknowledged: topUp.acknowledged,
+    acknowledgedAt: topUp.acknowledgedAt,
+  };
 }

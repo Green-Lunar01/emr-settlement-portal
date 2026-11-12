@@ -1,23 +1,8 @@
 import { useState } from "react";
 import { ArrowRight, Moon } from "lucide-react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "../hooks/useApp";
 import { ROLE_HOME } from "../utils/roles";
-
-const demoAccounts = [
-  {
-    label: "Finance",
-    email: "finance@lunar.demo",
-  },
-  {
-    label: "Facility Manager",
-    email: "manager@lunar.demo",
-  },
-  {
-    label: "Cashier",
-    email: "cashier@lunar.demo",
-  },
-];
 
 export default function LoginPage() {
   const { currentUser, login, sessionReady } = useApp();
@@ -170,11 +155,16 @@ export default function LoginPage() {
             </button>
           </form>
 
-       
+          <p className="mt-6 text-sm">
+            New here?{" "}
+            <Link to="/signup" className="font-medium text-lunar-primary">
+              Request access
+            </Link>
+          </p>
 
           <p className="mt-5 text-xs leading-relaxed text-lunar-muted">
-            Cashier accounts are created by Finance. EMR reviews
-            are stored on the server.
+            Front Office reviews every access request before an account
+            is created.
           </p>
         </div>
       </section>

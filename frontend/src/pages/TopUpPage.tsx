@@ -1,17 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 
+import { apiRequest, type ApiDailyAccount, type ApiTopUp } from "../api/client";
 import { useApp } from "../hooks/useApp";
 import { formatMoney, getToday } from "../utils/accounting";
-import {
-  acknowledgeTopUp,
-  canAccessTopUp,
-  getTodayWallet,
-  issueTopUp,
-} from "../utils/topUp";
 
 export default function TopUpPage() {
-  const { data, currentUser, updateData } = useApp();
+  const { data, currentUser } = useApp();
+
+  const [topUps, setTopUps] = useState<ApiTopUp[]>([]);
+  const [wallet, setWallet] = useState<ApiDailyAccount | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState("");
@@ -23,13 +22,42 @@ export default function TopUpPage() {
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-
-  if (!currentUser) {
-    return null;
-  }
+  const [busy, setBusy] = useState(false);
 
   const actor = currentUser;
-  const isCashier = actor.role === "cashier";
+  const isCashier = actor?.role === "cashier";
+
+  async function load(): Promise<void> {
+    if (!actor) return;
+    setLoading(true);
+
+    try {
+      const [topUpResult, walletResult] = await Promise.all([
+        apiRequest<{ topUps: ApiTopUp[] }>("/api/top-ups"),
+        isCashier
+          ? apiRequest<ApiDailyAccount>("/api/daily-accounts/today")
+          : Promise.resolve(null),
+      ]);
+
+      setTopUps(topUpResult.topUps);
+      setWallet(walletResult);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to load top-ups.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actor?.id]);
+
+  if (!actor) {
+    return null;
+  }
 
   const cashiers = data.users.filter(
     (user) =>
@@ -41,18 +69,7 @@ export default function TopUpPage() {
   );
 
   function userName(id: string): string {
-    return (
-      data.users.find((user) => user.id === id)?.name ??
-      "Unknown user"
-    );
-  }
-
-  function hospitalName(id: string): string {
-    return (
-      data.hospitals.find(
-        (hospital) => hospital.id === id,
-      )?.name ?? "Unknown hospital"
-    );
+    return data.users.find((user) => user.id === id)?.name ?? "Unknown user";
   }
 
   function displayTime(value: string): string {
@@ -61,125 +78,66 @@ export default function TopUpPage() {
     });
   }
 
-  const visibleTopUps = data.topUps.filter(
-    (topUp) => canAccessTopUp(actor, topUp),
-  );
-
-  const records = visibleTopUps
+  const records = topUps
     .filter((topUp) => {
-      const matchesSearch = userName(topUp.cashierId)
+      const matchesSearch = topUp.cashierName
         .toLowerCase()
         .includes(search.trim().toLowerCase());
-
-      const matchesDate =
-        !dateFilter || topUp.date === dateFilter;
-
+      const matchesDate = !dateFilter || topUp.date === dateFilter;
       const matchesReceipt =
         !receiptFilter ||
         (receiptFilter === "acknowledged"
           ? topUp.acknowledged
           : !topUp.acknowledged);
 
-      return (
-        matchesSearch &&
-        matchesDate &&
-        matchesReceipt
-      );
+      return matchesSearch && matchesDate && matchesReceipt;
     })
-    .sort((a, b) =>
-      b.issuedAt.localeCompare(a.issuedAt),
-    );
+    .sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
 
-  const todayTopUps = visibleTopUps.filter(
-    (topUp) => topUp.date === getToday(),
-  );
-
+  const todayTopUps = topUps.filter((topUp) => topUp.date === getToday());
   const totalIssuedToday = todayTopUps.reduce(
     (total, topUp) => total + topUp.amount,
     0,
   );
-
-  const latestTopUp = [...todayTopUps].sort(
-    (a, b) => b.issuedAt.localeCompare(a.issuedAt),
+  const latestTopUp = [...todayTopUps].sort((a, b) =>
+    b.issuedAt.localeCompare(a.issuedAt),
   )[0];
-
-  let walletError = "";
-  let wallet: ReturnType<typeof getTodayWallet> | null =
-    null;
-
-  if (isCashier) {
-    try {
-      wallet = getTodayWallet(data, actor);
-    } catch (err) {
-      walletError =
-        err instanceof Error
-          ? err.message
-          : "Unable to calculate your wallet balance.";
-    }
-  }
 
   const cards =
     isCashier && wallet
       ? [
-          {
-            label: "Previous balance",
-            value: formatMoney(wallet.openingBalance),
-          },
-          {
-            label: "Latest top-up today",
-            value: formatMoney(latestTopUp?.amount ?? 0),
-          },
-          {
-            label: "Total top-ups today",
-            value: formatMoney(wallet.totalTopUps),
-          },
-          {
-            label: "Total available",
-            value: formatMoney(wallet.totalAvailable),
-          },
-          {
-            label: "Total spent",
-            value: formatMoney(wallet.totalSpent),
-          },
+          { label: "Previous balance", value: formatMoney(wallet.summary.openingBalance) },
+          { label: "Latest top-up today", value: formatMoney(latestTopUp?.amount ?? 0) },
+          { label: "Total top-ups today", value: formatMoney(wallet.summary.totalTopUps) },
+          { label: "Total available", value: formatMoney(wallet.summary.totalAvailable) },
+          { label: "Total spent", value: formatMoney(wallet.summary.totalSpent) },
           {
             label: "Expected wallet balance",
-            value: formatMoney(
-              wallet.expectedClosingBalance,
-            ),
+            value: formatMoney(wallet.summary.expectedClosingBalance),
           },
         ]
       : isCashier
         ? []
         : [
-            {
-              label: "Active cashiers",
-              value: String(cashiers.length),
-            },
-            {
-              label: "Top-ups issued today",
-              value: formatMoney(totalIssuedToday),
-            },
+            { label: "Active cashiers", value: String(cashiers.length) },
+            { label: "Top-ups issued today", value: formatMoney(totalIssuedToday) },
             {
               label: "Awaiting receipt confirmation",
               value: String(
-                visibleTopUps.filter(
-                  (topUp) => !topUp.acknowledged,
-                ).length,
+                topUps.filter((topUp) => !topUp.acknowledged).length,
               ),
             },
           ];
 
   function openForm(selectedCashierId?: string) {
-    setCashierId(
-      selectedCashierId ?? cashiers[0]?.id ?? "",
-    );
+    setCashierId(selectedCashierId ?? cashiers[0]?.id ?? "");
     setAmount("");
     setError("");
     setMessage("");
     setShowForm(true);
   }
 
-  function submitTopUp() {
+  async function submitTopUp(): Promise<void> {
     setError("");
     setMessage("");
 
@@ -188,44 +146,48 @@ export default function TopUpPage() {
       return;
     }
 
+    const parsedAmount = Number(amount);
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setError("Enter an amount greater than zero.");
+      return;
+    }
+
+    setBusy(true);
+
     try {
-      updateData((current) =>
-        issueTopUp(
-          current,
-          actor,
-          cashierId,
-          Number(amount),
-        ),
-      );
+      await apiRequest("/api/top-ups", {
+        method: "POST",
+        json: { cashierId, amount: parsedAmount },
+      });
 
       setShowForm(false);
       setMessage(
         `Top-up issued to ${userName(cashierId)}. Awaiting cashier receipt confirmation.`,
       );
+      await load();
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to issue the top-up.",
+        err instanceof Error ? err.message : "Unable to issue the top-up.",
       );
+    } finally {
+      setBusy(false);
     }
   }
 
-  function confirmReceipt(topUpId: string) {
+  async function confirmReceipt(topUpId: string): Promise<void> {
     setError("");
     setMessage("");
 
     try {
-      updateData((current) =>
-        acknowledgeTopUp(current, actor, topUpId),
-      );
-
+      await apiRequest(`/api/top-ups/${topUpId}/acknowledge`, {
+        method: "POST",
+      });
       setMessage("Top-up receipt confirmed.");
+      await load();
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to confirm receipt.",
+        err instanceof Error ? err.message : "Unable to confirm receipt.",
       );
     }
   }
@@ -234,9 +196,7 @@ export default function TopUpPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">
-            Top Up
-          </h1>
+          <h1 className="text-2xl font-semibold">Top Up</h1>
 
           <p className="mt-2 text-sm text-lunar-muted">
             {isCashier
@@ -258,28 +218,14 @@ export default function TopUpPage() {
         )}
       </div>
 
-      {walletError && (
-        <p
-          role="alert"
-          className="mt-5 rounded-lg bg-amber-50 p-4 text-sm text-amber-800"
-        >
-          {walletError}
-        </p>
-      )}
-
       <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {cards.map((card) => (
           <article
             key={card.label}
             className="rounded-xl border border-lunar-border bg-white p-5"
           >
-            <p className="text-sm text-lunar-muted">
-              {card.label}
-            </p>
-
-            <p className="mt-4 text-2xl font-semibold">
-              {card.value}
-            </p>
+            <p className="text-sm text-lunar-muted">{card.label}</p>
+            <p className="mt-4 text-2xl font-semibold">{card.value}</p>
           </article>
         ))}
       </section>
@@ -304,10 +250,7 @@ export default function TopUpPage() {
 
       {!isCashier && (
         <section className="mt-6 rounded-xl border border-lunar-border bg-white p-5">
-          <h2 className="text-lg font-semibold">
-            Cashier accounts
-          </h2>
-
+          <h2 className="text-lg font-semibold">Cashier accounts</h2>
           <p className="mt-2 text-sm text-lunar-muted">
             Select a cashier to issue a top-up.
           </p>
@@ -319,12 +262,10 @@ export default function TopUpPage() {
                 className="flex items-center justify-between gap-3 rounded-lg border border-lunar-border p-4"
               >
                 <div>
-                  <p className="text-sm font-medium">
-                    {cashier.name}
-                  </p>
-
+                  <p className="text-sm font-medium">{cashier.name}</p>
                   <p className="mt-1 text-xs text-lunar-muted">
-                    {hospitalName(cashier.hospitalIds[0])}
+                    {data.hospitals.find((h) => h.id === cashier.hospitalIds[0])
+                      ?.name ?? "Unknown hospital"}
                   </p>
                 </div>
 
@@ -349,10 +290,7 @@ export default function TopUpPage() {
 
       <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white">
         <div className="border-b border-lunar-border p-5">
-          <h2 className="text-lg font-semibold">
-            Disbursement ledger
-          </h2>
-
+          <h2 className="text-lg font-semibold">Disbursement ledger</h2>
           <p className="mt-2 text-sm text-lunar-muted">
             Each top-up is recorded separately.
           </p>
@@ -360,18 +298,12 @@ export default function TopUpPage() {
 
         <div className="flex flex-wrap gap-3 border-b border-lunar-border p-4">
           <div className="relative min-w-48 flex-1">
-            <Search
-              size={17}
-              className="absolute left-3 top-3 text-lunar-muted"
-            />
-
+            <Search size={17} className="absolute left-3 top-3 text-lunar-muted" />
             <input
               aria-label="Search cashier name"
               placeholder="Search cashier name"
               value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
+              onChange={(event) => setSearch(event.target.value)}
               className="w-full rounded-lg border border-lunar-border py-2.5 pl-10 pr-3 text-sm"
             />
           </div>
@@ -380,27 +312,19 @@ export default function TopUpPage() {
             type="date"
             aria-label="Filter top-up date"
             value={dateFilter}
-            onChange={(event) =>
-              setDateFilter(event.target.value)
-            }
+            onChange={(event) => setDateFilter(event.target.value)}
             className="rounded-lg border border-lunar-border px-3 py-2 text-sm"
           />
 
           <select
             aria-label="Filter receipt confirmation"
             value={receiptFilter}
-            onChange={(event) =>
-              setReceiptFilter(event.target.value)
-            }
+            onChange={(event) => setReceiptFilter(event.target.value)}
             className="rounded-lg border border-lunar-border px-3 py-2 text-sm"
           >
             <option value="">All receipts</option>
-            <option value="pending">
-              Awaiting confirmation
-            </option>
-            <option value="acknowledged">
-              Receipt confirmed
-            </option>
+            <option value="pending">Awaiting confirmation</option>
+            <option value="acknowledged">Receipt confirmed</option>
           </select>
 
           <button
@@ -425,25 +349,17 @@ export default function TopUpPage() {
                 <th className="px-4 py-4">Amount</th>
                 <th className="px-4 py-4">Issued by</th>
                 <th className="px-4 py-4">Receipt</th>
-                {isCashier && (
-                  <th className="px-4 py-4">Action</th>
-                )}
+                {isCashier && <th className="px-4 py-4">Action</th>}
               </tr>
             </thead>
 
             <tbody>
               {records.map((topUp) => (
-                <tr
-                  key={topUp.id}
-                  className="border-t border-lunar-border"
-                >
+                <tr key={topUp.id} className="border-t border-lunar-border">
                   <td className="px-4 py-4">
-                    <p className="font-medium">
-                      {userName(topUp.cashierId)}
-                    </p>
-
+                    <p className="font-medium">{topUp.cashierName}</p>
                     <p className="mt-1 text-xs text-lunar-muted">
-                      {hospitalName(topUp.hospitalId)}
+                      {topUp.facilityName}
                     </p>
                   </td>
 
@@ -458,9 +374,7 @@ export default function TopUpPage() {
                     {formatMoney(topUp.amount)}
                   </td>
 
-                  <td className="px-4 py-4">
-                    {userName(topUp.issuedBy)}
-                  </td>
+                  <td className="px-4 py-4">{topUp.issuedByName}</td>
 
                   <td className="px-4 py-4">
                     <span
@@ -470,9 +384,7 @@ export default function TopUpPage() {
                           : "rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-700"
                       }
                     >
-                      {topUp.acknowledged
-                        ? "Confirmed"
-                        : "Pending"}
+                      {topUp.acknowledged ? "Confirmed" : "Pending"}
                     </span>
 
                     {topUp.acknowledgedAt && (
@@ -487,9 +399,7 @@ export default function TopUpPage() {
                       {!topUp.acknowledged ? (
                         <button
                           type="button"
-                          onClick={() =>
-                            confirmReceipt(topUp.id)
-                          }
+                          onClick={() => void confirmReceipt(topUp.id)}
                           className="rounded-lg bg-lunar-primary px-3 py-2 text-xs font-medium text-white"
                         >
                           Confirm receipt
@@ -506,7 +416,7 @@ export default function TopUpPage() {
             </tbody>
           </table>
 
-          {records.length === 0 && (
+          {!loading && records.length === 0 && (
             <p className="p-8 text-center text-sm text-lunar-muted">
               No top-ups match your filters.
             </p>
@@ -523,10 +433,7 @@ export default function TopUpPage() {
             className="w-full max-w-md rounded-xl bg-white p-6"
           >
             <div className="flex items-center justify-between">
-              <h2
-                id="top-up-title"
-                className="text-xl font-semibold"
-              >
+              <h2 id="top-up-title" className="text-xl font-semibold">
                 Issue top-up
               </h2>
 
@@ -543,7 +450,7 @@ export default function TopUpPage() {
               className="mt-6 space-y-5"
               onSubmit={(event) => {
                 event.preventDefault();
-                submitTopUp();
+                void submitTopUp();
               }}
             >
               <label className="block text-sm font-medium">
@@ -551,20 +458,16 @@ export default function TopUpPage() {
                 <select
                   required
                   value={cashierId}
-                  onChange={(event) =>
-                    setCashierId(event.target.value)
-                  }
+                  onChange={(event) => setCashierId(event.target.value)}
                   className="mt-2 w-full rounded-lg border border-lunar-border px-3 py-3 text-sm"
                 >
                   <option value="">Select cashier</option>
 
                   {cashiers.map((cashier) => (
-                    <option
-                      key={cashier.id}
-                      value={cashier.id}
-                    >
+                    <option key={cashier.id} value={cashier.id}>
                       {cashier.name} —{" "}
-                      {hospitalName(cashier.hospitalIds[0])}
+                      {data.hospitals.find((h) => h.id === cashier.hospitalIds[0])
+                        ?.name ?? "Unknown hospital"}
                     </option>
                   ))}
                 </select>
@@ -578,18 +481,15 @@ export default function TopUpPage() {
                   min="0.01"
                   step="0.01"
                   value={amount}
-                  onChange={(event) =>
-                    setAmount(event.target.value)
-                  }
+                  onChange={(event) => setAmount(event.target.value)}
                   placeholder="e.g. 100000"
                   className="mt-2 w-full rounded-lg border border-lunar-border px-3 py-3 text-sm"
                 />
               </label>
 
               <p className="text-xs leading-relaxed text-lunar-muted">
-                This top-up adds to the cashier's existing
-                wallet balance today, {getToday()}. The
-                cashier must confirm receipt.
+                This top-up adds to the cashier's existing wallet balance
+                today, {getToday()}. The cashier must confirm receipt.
               </p>
 
               {error && (
@@ -612,7 +512,8 @@ export default function TopUpPage() {
 
                 <button
                   type="submit"
-                  className="rounded-lg bg-lunar-primary px-4 py-2 text-sm font-medium text-white"
+                  disabled={busy}
+                  className="rounded-lg bg-lunar-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
                 >
                   Issue top-up
                 </button>

@@ -1,8 +1,11 @@
 import {
   ArrowLeftRight,
+  Building2,
   LayoutDashboard,
   LogOut,
   Moon,
+  Receipt,
+  UserCheck,
   Users,
   Wallet,
 } from "lucide-react";
@@ -30,42 +33,74 @@ export default function DashboardLayout() {
     )
     .map((hospital) => hospital.name);
 
- const navigation = [
-  {
-    label: "Dashboard",
-    path: home,
-    icon: LayoutDashboard,
-    end: true,
-  },
-  {
-    label: "EMR Accounting",
-    path: `${home}/emr`,
-    icon: ArrowLeftRight,
-    end: false,
-  },
-  {
-    label: "Top Up",
-    path: `${home}/top-up`,
-    icon: Wallet,
-    end: false,
-  },
-  {
-  label: "Daily Wallet Accounts",
-  path: `${home}/daily-accounts`,
-  icon: Wallet,
-  end: false,
-},
-  ...(currentUser.role !== "cashier"
+ const navigation =
+  currentUser.role === "front_office"
     ? [
         {
-          label: "Cashiers",
-          path: `${home}/cashiers`,
-          icon: Users,
+          label: "Staff",
+          path: home,
+          icon: UserCheck,
+          end: true,
+        },
+        {
+          label: "Departments",
+          path: `${home}/departments`,
+          icon: Building2,
+          end: false,
+        },
+        {
+          label: "Facilities",
+          path: `${home}/facilities`,
+          icon: Building2,
           end: false,
         },
       ]
-    : []),
-];
+    : [
+        {
+          label: "Dashboard",
+          path: home,
+          icon: LayoutDashboard,
+          end: true,
+        },
+        {
+          label: "EMR Accounting",
+          path: `${home}/emr`,
+          icon: ArrowLeftRight,
+          end: false,
+        },
+        ...(currentUser.role === "cashier"
+          ? [
+              {
+                label: "Billing",
+                path: `${home}/billing`,
+                icon: Receipt,
+                end: false,
+              },
+            ]
+          : []),
+        {
+          label: "Top Up",
+          path: `${home}/top-up`,
+          icon: Wallet,
+          end: false,
+        },
+        {
+          label: "Daily Wallet Accounts",
+          path: `${home}/daily-accounts`,
+          icon: Wallet,
+          end: false,
+        },
+        ...(currentUser.role !== "cashier"
+          ? [
+              {
+                label: "Cashiers",
+                path: `${home}/cashiers`,
+                icon: Users,
+                end: false,
+              },
+            ]
+          : []),
+      ];
 
   function signOut() {
     logout();

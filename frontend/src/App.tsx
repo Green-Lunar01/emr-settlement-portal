@@ -11,11 +11,16 @@ import { useApp } from "./hooks/useApp";
 import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardLayout from "./layouts/DashboardLayout";
 
+import BillingPage from "./pages/BillingPage";
 import CashiersPage from "./pages/CashiersPage";
 import DailyAccountsPage from "./pages/DailyAccountsPage";
 import DashboardPage from "./pages/DashboardPage";
+import DepartmentsPage from "./pages/DepartmentsPage";
 import EmrPage from "./pages/EmrPage";
+import FacilitiesPage from "./pages/FacilitiesPage";
 import LoginPage from "./pages/LoginPage";
+import SignupPage from "./pages/SignupPage";
+import StaffPage from "./pages/StaffPage";
 import TopUpPage from "./pages/TopUpPage";
 
 import { ROLE_HOME } from "./utils/roles";
@@ -47,6 +52,11 @@ export default function App() {
           <Route
             path="/login"
             element={<LoginPage />}
+          />
+
+          <Route
+            path="/signup"
+            element={<SignupPage />}
           />
 
           {/* Finance portal */}
@@ -127,6 +137,40 @@ export default function App() {
             </Route>
           </Route>
 
+          {/* Front Office portal */}
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={["front_office"]}
+              />
+            }
+          >
+            <Route
+              path="/front-office"
+              element={<DashboardLayout />}
+            >
+              <Route
+                index
+                element={<StaffPage />}
+              />
+
+              <Route
+                path="staff"
+                element={<StaffPage />}
+              />
+
+              <Route
+                path="departments"
+                element={<DepartmentsPage />}
+              />
+
+              <Route
+                path="facilities"
+                element={<FacilitiesPage />}
+              />
+            </Route>
+          </Route>
+
           {/* Cashier portal */}
           <Route
             element={
@@ -157,6 +201,11 @@ export default function App() {
               <Route
                 path="daily-accounts"
                 element={<DailyAccountsPage />}
+              />
+
+              <Route
+                path="billing"
+                element={<BillingPage />}
               />
             </Route>
           </Route>

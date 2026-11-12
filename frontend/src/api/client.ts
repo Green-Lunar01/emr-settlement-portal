@@ -105,6 +105,139 @@ export interface EmrFiguresInput {
   transactionAmount: number;
 }
 
+export type WalletReviewStatus = "Pending" | "Okay" | "Check Record";
+
+export interface ApiWalletReview {
+  status: WalletReviewStatus;
+  reviewedBy: string | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  comment: string | null;
+}
+
+export interface ApiCashReceipt {
+  confirmed: boolean;
+  confirmedBy: string | null;
+  confirmedByName: string | null;
+  confirmedAt: string | null;
+}
+
+export interface ApiWalletSummary {
+  openingBalance: number;
+  totalTopUps: number;
+  totalAvailable: number;
+  bankTransfers: number;
+  cashCollected: number;
+  cardPayments: number;
+  totalSpent: number;
+  expectedClosingBalance: number;
+  actualClosingBalance: number | null;
+  variance: number | null;
+  tallies: boolean | null;
+}
+
+export interface ApiTopUp {
+  id: string;
+  facilityId: string;
+  facilityName: string;
+  cashierId: string;
+  cashierName: string;
+  date: string;
+  amount: number;
+  issuedBy: string;
+  issuedByName: string;
+  issuedAt: string;
+  acknowledged: boolean;
+  acknowledgedAt: string | null;
+}
+
+export interface ApiDailyAccount {
+  id: string;
+  facilityId: string;
+  facilityName: string;
+  cashierId: string;
+  cashierName: string;
+  date: string;
+  status: "Draft" | "Submitted";
+  submittedAt: string | null;
+  editable: boolean;
+  hasLaterAccount: boolean;
+  summary: ApiWalletSummary;
+  managerReview: ApiWalletReview;
+  financeReview: ApiWalletReview;
+  cashReceipt: ApiCashReceipt;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DailyAccountInput {
+  bankTransfers: number;
+  cashCollected: number;
+  cardPayments: number;
+  actualClosingBalance: number;
+}
+
+export interface ApiDepartment {
+  id: string;
+  facilityId: string;
+  name: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export type PaymentMethod = "Transfer" | "POS" | "Cash";
+
+export type BillStatus =
+  | "Draft"
+  | "Awaiting Transfer"
+  | "Awaiting Confirmation"
+  | "Paid";
+
+export interface ApiTransferDetails {
+  accountNumber: string;
+  bankName: string;
+  reference: string;
+  generatedAt: string;
+}
+
+export interface ApiBill {
+  id: string;
+  facilityId: string;
+  facilityName: string;
+  departmentId: string;
+  departmentName: string;
+  cashierId: string;
+  cashierName: string;
+  payerName: string;
+  description: string;
+  amount: number;
+  status: BillStatus;
+  paymentMethod: PaymentMethod | null;
+  transfer: ApiTransferDetails | null;
+  paidAt: string | null;
+  confirmedByName: string | null;
+  receiptNumber: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type OnboardingStatus = "Pending" | "Approved" | "Rejected";
+
+export interface ApiOnboardingRequest {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  role: UserRole;
+  facilityId: string;
+  facilityName: string;
+  status: OnboardingStatus;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+}
+
 export function getToken(): string | null {
   return sessionStorage.getItem(TOKEN_KEY);
 }
@@ -132,6 +265,11 @@ export function toLocalUser(user: ApiUser): User {
   };
 }
 
+// Empty in dev (Vite proxies /api to the local backend) or when frontend
+// and backend share an origin in production. Set VITE_API_BASE_URL to the
+// deployed backend's URL (e.g. the Render service) when they don't.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+
 export async function apiRequest<T>(
   path: string,
   init: RequestInit & { json?: unknown } = {},
@@ -150,7 +288,7 @@ export async function apiRequest<T>(
   let response: Response;
 
   try {
-    response = await fetch(path, {
+    response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       headers,
       body:

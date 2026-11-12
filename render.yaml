@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: emr-settlement-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: NODE_VERSION
+        value: 20.20.2

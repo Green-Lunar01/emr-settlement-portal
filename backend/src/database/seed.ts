@@ -5,11 +5,12 @@ import {
   getToday,
   nowIso,
   parseAmountKobo,
+  type DepartmentDoc,
   type FacilityDoc,
   type TapDoc,
   type UserDoc,
 } from "../entity";
-import { facilities, tapRecords, users } from "./index";
+import { departments, facilities, tapRecords, users } from "./index";
 
 const DEMO_PASSWORD = "Lunar123!";
 
@@ -68,6 +69,19 @@ export async function seedIfEmpty(): Promise<boolean> {
       createdBy: "user-finance",
       createdAt,
     },
+    {
+      _id: "user-front-office",
+      name: "Lagos Front Office",
+      phone: "08010000004",
+      email: "frontoffice@lunar.demo",
+      passwordHash: hashPassword(DEMO_PASSWORD),
+      role: "front_office",
+      status: "active",
+      facilityIds: ["facility-lagos"],
+      supervisorIds: [],
+      createdBy: "user-finance",
+      createdAt,
+    },
   ];
 
   // The October 8 row matches the PRD example: TAP is 3 transactions
@@ -121,9 +135,40 @@ export async function seedIfEmpty(): Promise<boolean> {
     });
   }
 
+  const departmentDocs: DepartmentDoc[] = [
+    {
+      _id: randomUUID(),
+      facilityId: "facility-lagos",
+      name: "Consultation",
+      active: true,
+      createdBy: "user-front-office",
+      createdAt,
+      updatedAt: createdAt,
+    },
+    {
+      _id: randomUUID(),
+      facilityId: "facility-lagos",
+      name: "Pharmacy",
+      active: true,
+      createdBy: "user-front-office",
+      createdAt,
+      updatedAt: createdAt,
+    },
+    {
+      _id: randomUUID(),
+      facilityId: "facility-lagos",
+      name: "Laboratory",
+      active: true,
+      createdBy: "user-front-office",
+      createdAt,
+      updatedAt: createdAt,
+    },
+  ];
+
   await facilities().insertMany(facilityDocs);
   await users().insertMany(userDocs);
   await tapRecords().insertMany(tapDocs);
+  await departments().insertMany(departmentDocs);
 
   return true;
 }

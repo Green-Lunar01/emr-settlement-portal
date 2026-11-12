@@ -10,7 +10,6 @@ export interface AppContextValue {
 
   login: (email: string, password: string) => Promise<User>;
   logout: () => void;
-  updateData: (updater: (current: AppData) => AppData) => void;
   refreshDirectory: () => Promise<void>;
   upsertEmr: (record: ApiEmr) => void;
 }

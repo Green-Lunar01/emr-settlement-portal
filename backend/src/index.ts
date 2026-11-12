@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { closeDatabase, connectDatabase, ensureIndexes } from "./database";
 import { seedIfEmpty } from "./database/seed";
 import { createAppServer } from "./server";

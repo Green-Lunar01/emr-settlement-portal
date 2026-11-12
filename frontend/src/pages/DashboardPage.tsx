@@ -1,23 +1,66 @@
+import { useEffect, useState } from "react";
+import { apiRequest, type ApiDailyAccount, type ApiTopUp } from "../api/client";
 import { useApp } from "../hooks/useApp";
-import {
-  calculateWalletSummary,
-  formatMoney,
-  getCarryForwardBalance,
-  getToday,
-} from "../utils/accounting";
+import { formatMoney, getToday } from "../utils/accounting";
 import { ROLE_LABELS } from "../utils/roles";
 
 export default function DashboardPage() {
- const { data, currentUser } = useApp();
+  const { data, currentUser } = useApp();
+  const [wallet, setWallet] = useState<ApiDailyAccount | null>(null);
+  const [topUps, setTopUps] = useState<ApiTopUp[]>([]);
+  const [accounts, setAccounts] = useState<ApiDailyAccount[]>([]);
+  const [error, setError] = useState("");
+
+  const isCashier = currentUser?.role === "cashier";
+
+  useEffect(() => {
+    if (!currentUser) return;
+    let cancelled = false;
+
+    async function load(): Promise<void> {
+      try {
+        const today = getToday();
+        const [topUpResult, accountResult, walletResult] = await Promise.all([
+          apiRequest<{ topUps: ApiTopUp[] }>(
+            `/api/top-ups?date=${encodeURIComponent(today)}`,
+          ),
+          apiRequest<{ dailyAccounts: ApiDailyAccount[] }>(
+            `/api/daily-accounts?date=${encodeURIComponent(today)}`,
+          ),
+          isCashier
+            ? apiRequest<ApiDailyAccount>("/api/daily-accounts/today")
+            : Promise.resolve(null),
+        ]);
+
+        if (!cancelled) {
+          setTopUps(topUpResult.topUps);
+          setAccounts(accountResult.dailyAccounts);
+          setWallet(walletResult);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unable to load dashboard figures.",
+          );
+        }
+      }
+    }
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, isCashier]);
 
   if (!currentUser) {
     return null;
   }
 
   const hospitalNames = data.hospitals
-    .filter((hospital) =>
-      currentUser.hospitalIds.includes(hospital.id),
-    )
+    .filter((hospital) => currentUser.hospitalIds.includes(hospital.id))
     .map((hospital) => hospital.name);
 
   const visibleCashiers = data.users.filter(
@@ -30,123 +73,45 @@ export default function DashboardPage() {
   );
 
   const today = getToday();
-
-  const todaysTopUps = data.topUps.filter(
-    (topUp) =>
-      topUp.date === today &&
-      currentUser.hospitalIds.includes(topUp.hospitalId) &&
-      (currentUser.role !== "cashier" ||
-        topUp.cashierId === currentUser.id),
-  );
-
-  const totalTopUps = todaysTopUps.reduce(
-    (total, topUp) => total + topUp.amount,
-    0,
-  );
-
-  const todaysAccounts = data.dailyAccounts.filter(
-    (account) =>
-      account.date === today &&
-      currentUser.hospitalIds.includes(account.hospitalId),
-  );
-
-  let openingBalance = 0;
-  let walletBalance = 0;
-  let balanceError = "";
-
-  if (currentUser.role === "cashier") {
-    const hospitalId = currentUser.hospitalIds[0];
-
-    const account = data.dailyAccounts.find(
-      (item) =>
-        item.cashierId === currentUser.id &&
-        item.hospitalId === hospitalId &&
-        item.date === today,
-    );
-
-    if (account) {
-      const summary = calculateWalletSummary(
-        account,
-        data.topUps,
-      );
-
-      openingBalance = summary.openingBalance;
-      walletBalance = summary.expectedClosingBalance;
-    } else if (hospitalId) {
-      try {
-        openingBalance = getCarryForwardBalance(
-          currentUser.id,
-          hospitalId,
-          today,
-          data.dailyAccounts,
-          data.topUps,
-        );
-
-        walletBalance = openingBalance + totalTopUps;
-      } catch (err) {
-        balanceError =
-          err instanceof Error
-            ? err.message
-            : "Unable to calculate your opening balance.";
-      }
-    } else {
-      balanceError = "Your account needs a hospital assignment.";
-    }
-  }
+  const totalTopUps = topUps.reduce((total, topUp) => total + topUp.amount, 0);
+  const latestTopUp = [...topUps].sort((a, b) =>
+    b.issuedAt.localeCompare(a.issuedAt),
+  )[0];
 
   const cashierCards = [
     {
       label: "Previous balance",
-      value: formatMoney(openingBalance),
+      value: formatMoney(wallet?.summary.openingBalance ?? 0),
     },
     {
       label: "Latest top-up today",
-      value: formatMoney(
-        [...todaysTopUps]
-          .sort((a, b) =>
-            b.issuedAt.localeCompare(a.issuedAt),
-          )[0]?.amount ?? 0,
-      ),
+      value: formatMoney(latestTopUp?.amount ?? 0),
     },
-    {
-      label: "Total top-ups today",
-      value: formatMoney(totalTopUps),
-    },
+    { label: "Total top-ups today", value: formatMoney(totalTopUps) },
     {
       label: "Total available today",
-      value: formatMoney(openingBalance + totalTopUps),
+      value: formatMoney(wallet?.summary.totalAvailable ?? 0),
     },
     {
       label: "Expected wallet balance",
-      value: formatMoney(walletBalance),
+      value: formatMoney(wallet?.summary.expectedClosingBalance ?? 0),
     },
   ];
 
   const staffCards = [
-    {
-      label: "Active cashiers",
-      value: String(visibleCashiers.length),
-    },
-    {
-      label: "Top-ups issued today",
-      value: formatMoney(totalTopUps),
-    },
+    { label: "Active cashiers", value: String(visibleCashiers.length) },
+    { label: "Top-ups issued today", value: formatMoney(totalTopUps) },
     {
       label: "Daily accounts submitted today",
       value: String(
-        todaysAccounts.filter(
-          (account) => account.status === "Submitted",
-        ).length,
+        accounts.filter((account) => account.status === "Submitted").length,
       ),
     },
   ];
 
-  const cards =
-    currentUser.role === "cashier"
-      ? cashierCards
-      : staffCards;
+  const cards = isCashier ? cashierCards : staffCards;
 
-    return (
+  return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-widest text-lunar-primary">
         {ROLE_LABELS[currentUser.role]}
@@ -160,12 +125,12 @@ export default function DashboardPage() {
         {hospitalNames.join(" · ")} · {today}
       </p>
 
-      {balanceError ? (
+      {error ? (
         <p
           role="alert"
           className="mt-6 rounded-lg bg-amber-50 p-4 text-sm text-amber-800"
         >
-          {balanceError}
+          {error}
         </p>
       ) : (
         <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -174,22 +139,15 @@ export default function DashboardPage() {
               key={card.label}
               className="rounded-xl border border-lunar-border bg-white p-6"
             >
-              <p className="text-sm text-lunar-muted">
-                {card.label}
-              </p>
-
-              <p className="mt-4 text-2xl font-semibold">
-                {card.value}
-              </p>
+              <p className="text-sm text-lunar-muted">{card.label}</p>
+              <p className="mt-4 text-2xl font-semibold">{card.value}</p>
             </article>
           ))}
         </section>
       )}
 
       <section className="mt-8 rounded-xl border border-lunar-border bg-white p-6">
-        <h2 className="text-lg font-semibold">
-          Your workspace
-        </h2>
+        <h2 className="text-lg font-semibold">Your workspace</h2>
 
         <p className="mt-3 text-sm leading-relaxed text-lunar-muted">
           {currentUser.role === "finance"

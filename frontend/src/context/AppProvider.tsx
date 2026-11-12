@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
   apiRequest,
@@ -10,50 +10,14 @@ import {
   type ApiUser,
 } from "../api/client";
 import type { AppData, Hospital, User } from "../types";
-import { loadAppData, saveAppData } from "../utils/storage";
 import { AppContext } from "./AppContext";
 
 interface AppProviderProps {
   children: ReactNode;
 }
 
-interface WalletData {
-  topUps: AppData["topUps"];
-  dailyAccounts: AppData["dailyAccounts"];
-  activityLogs: AppData["activityLogs"];
-}
-
-function loadWallet(): WalletData {
-  try {
-    const saved = loadAppData();
-
-    return {
-      topUps: saved.topUps,
-      dailyAccounts: saved.dailyAccounts,
-      activityLogs: saved.activityLogs,
-    };
-  } catch {
-    return {
-      topUps: [],
-      dailyAccounts: [],
-      activityLogs: [],
-    };
-  }
-}
-
-function buildData(
-  hospitals: Hospital[],
-  users: User[],
-  wallet: WalletData,
-): AppData {
-  return {
-    hospitals,
-    users,
-    emrRecords: [],
-    topUps: wallet.topUps,
-    dailyAccounts: wallet.dailyAccounts,
-    activityLogs: wallet.activityLogs,
-  };
+function buildData(hospitals: Hospital[], users: User[]): AppData {
+  return { hospitals, users };
 }
 
 function mergeUsers(actor: User, cashiers: User[]): User[] {
@@ -68,19 +32,10 @@ function mergeUsers(actor: User, cashiers: User[]): User[] {
 }
 
 export function AppProvider({ children }: AppProviderProps) {
-  const walletRef = useRef(loadWallet());
-  const [data, setData] = useState<AppData>(() =>
-    buildData([], [], walletRef.current),
-  );
-  const dataRef = useRef(data);
+  const [data, setData] = useState<AppData>(() => buildData([], []));
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [emrRecords, setEmrRecords] = useState<ApiEmr[]>([]);
   const [sessionReady, setSessionReady] = useState(false);
-
-  function applyData(next: AppData): void {
-    dataRef.current = next;
-    setData(next);
-  }
 
   async function loadDirectory(actor: User): Promise<void> {
     const facilityResponse = await apiRequest<{ facilities: ApiFacility[] }>(
@@ -102,17 +57,7 @@ export function AppProvider({ children }: AppProviderProps) {
 
     setCurrentUser(actor);
     setEmrRecords(emr.records);
-    applyData(
-      buildData(
-        hospitals,
-        mergeUsers(actor, cashiers),
-        {
-          topUps: dataRef.current.topUps,
-          dailyAccounts: dataRef.current.dailyAccounts,
-          activityLogs: dataRef.current.activityLogs,
-        },
-      ),
-    );
+    setData(buildData(hospitals, mergeUsers(actor, cashiers)));
   }
 
   useEffect(() => {
@@ -171,24 +116,7 @@ export function AppProvider({ children }: AppProviderProps) {
     setToken(null);
     setCurrentUser(null);
     setEmrRecords([]);
-    applyData(
-      buildData([], [], {
-        topUps: dataRef.current.topUps,
-        dailyAccounts: dataRef.current.dailyAccounts,
-        activityLogs: dataRef.current.activityLogs,
-      }),
-    );
-  }
-
-  function updateData(updater: (current: AppData) => AppData): void {
-    const nextData = updater(structuredClone(dataRef.current));
-    saveAppData(nextData);
-    walletRef.current = {
-      topUps: nextData.topUps,
-      dailyAccounts: nextData.dailyAccounts,
-      activityLogs: nextData.activityLogs,
-    };
-    applyData(nextData);
+    setData(buildData([], []));
   }
 
   async function refreshDirectory(): Promise<void> {
@@ -220,7 +148,6 @@ export function AppProvider({ children }: AppProviderProps) {
         emrRecords,
         login,
         logout,
-        updateData,
         refreshDirectory,
         upsertEmr,
       }}

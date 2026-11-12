@@ -1,10 +1,15 @@
 import { MongoClient, type Collection, type Db } from "mongodb";
 import type {
   AuditDoc,
+  BillDoc,
+  DailyAccountDoc,
+  DepartmentDoc,
   EmrDoc,
   FacilityDoc,
+  OnboardingRequestDoc,
   SessionDoc,
   TapDoc,
+  TopUpDoc,
   UserDoc,
 } from "../entity";
 
@@ -110,6 +115,26 @@ export function auditLogs(): Collection<AuditDoc> {
   return db().collection<AuditDoc>("audit_logs");
 }
 
+export function topUps(): Collection<TopUpDoc> {
+  return db().collection<TopUpDoc>("top_ups");
+}
+
+export function dailyAccounts(): Collection<DailyAccountDoc> {
+  return db().collection<DailyAccountDoc>("daily_accounts");
+}
+
+export function departments(): Collection<DepartmentDoc> {
+  return db().collection<DepartmentDoc>("departments");
+}
+
+export function bills(): Collection<BillDoc> {
+  return db().collection<BillDoc>("bills");
+}
+
+export function onboardingRequests(): Collection<OnboardingRequestDoc> {
+  return db().collection<OnboardingRequestDoc>("onboarding_requests");
+}
+
 export async function ensureIndexes(): Promise<void> {
   await users().createIndex({ email: 1 }, { unique: true });
   await users().createIndex({ supervisorIds: 1 });
@@ -123,4 +148,18 @@ export async function ensureIndexes(): Promise<void> {
     { unique: true },
   );
   await auditLogs().createIndex({ entityType: 1, entityId: 1, createdAt: 1 });
+  await topUps().createIndex({ cashierId: 1, facilityId: 1, date: 1 });
+  await dailyAccounts().createIndex(
+    { cashierId: 1, facilityId: 1, date: 1 },
+    { unique: true },
+  );
+  await departments().createIndex({ facilityId: 1 });
+  await bills().createIndex({ facilityId: 1, createdAt: -1 });
+  await bills().createIndex({ cashierId: 1, createdAt: -1 });
+  await bills().createIndex(
+    { receiptNumber: 1 },
+    { unique: true, sparse: true },
+  );
+  await onboardingRequests().createIndex({ facilityId: 1, status: 1 });
+  await onboardingRequests().createIndex({ email: 1 });
 }
