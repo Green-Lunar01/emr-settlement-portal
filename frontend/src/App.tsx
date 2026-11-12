@@ -18,6 +18,7 @@ import DashboardPage from "./pages/DashboardPage";
 import DepartmentsPage from "./pages/DepartmentsPage";
 import EmrPage from "./pages/EmrPage";
 import FacilitiesPage from "./pages/FacilitiesPage";
+import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import ServicesPage from "./pages/ServicesPage";
 import SignupPage from "./pages/SignupPage";
@@ -39,7 +40,7 @@ function HomeRedirect() {
       to={
         currentUser
           ? ROLE_HOME[currentUser.role]
-          : "/login"
+          : "/"
       }
       replace
     />
@@ -51,6 +52,11 @@ export default function App() {
     <BrowserRouter>
       <AppProvider>
         <Routes>
+          <Route
+            path="/"
+            element={<LandingPage />}
+          />
+
           <Route
             path="/login"
             element={<LoginPage />}
