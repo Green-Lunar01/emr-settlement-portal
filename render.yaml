@@ -12,5 +12,15 @@ services:
         sync: false
       - key: CORS_ORIGIN
         sync: false
+      - key: MAILGUN_API_KEY
+        sync: false
+      - key: MAILGUN_DOMAIN
+        sync: false
+      - key: MAILER_ADDRESS
+        sync: false
+      - key: MAILGUN_REGION
+        sync: false
+      - key: PUBLIC_APP_URL
+        sync: false
       - key: NODE_VERSION
         value: 20.20.2
