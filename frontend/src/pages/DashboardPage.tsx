@@ -137,7 +137,7 @@ export default function DashboardPage() {
           {cards.map((card) => (
             <article
               key={card.label}
-              className="rounded-xl border border-lunar-border bg-white p-6"
+              className="rounded-xl border border-lunar-border bg-white shadow-card p-6"
             >
               <p className="text-sm text-lunar-muted">{card.label}</p>
               <p className="mt-4 text-2xl font-semibold">{card.value}</p>
@@ -146,7 +146,7 @@ export default function DashboardPage() {
         </section>
       )}
 
-      <section className="mt-8 rounded-xl border border-lunar-border bg-white p-6">
+      <section className="mt-8 rounded-xl border border-lunar-border bg-white shadow-card p-6">
         <h2 className="text-lg font-semibold">Your workspace</h2>
 
         <p className="mt-3 text-sm leading-relaxed text-lunar-muted">

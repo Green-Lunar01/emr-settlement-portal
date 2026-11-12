@@ -302,7 +302,7 @@ export default function DailyAccountsPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Daily Wallet Accounts</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Daily Wallet Accounts</h1>
           <p className="mt-2 text-sm text-lunar-muted">
             Account for collections and compare expected and actual balances.
           </p>
@@ -312,7 +312,7 @@ export default function DailyAccountsPage() {
           <button
             type="button"
             onClick={() => void openToday()}
-            className="flex items-center gap-2 rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white"
+            className="flex items-center gap-2 rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark"
           >
             <Plus size={18} />
             Today's account
@@ -335,7 +335,7 @@ export default function DailyAccountsPage() {
         </p>
       )}
 
-      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white">
+      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white shadow-card">
         <div className="flex flex-wrap gap-3 border-b border-lunar-border p-4">
           <div className="relative min-w-48 flex-1">
             <Search size={17} className="absolute left-3 top-3 text-lunar-muted" />
@@ -488,12 +488,12 @@ export default function DailyAccountsPage() {
       </section>
 
       {modalOpen && selectedAccount && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="daily-account-title"
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-raised"
           >
             <div className="flex items-center justify-between gap-4">
               <h2 id="daily-account-title" className="text-xl font-semibold">
@@ -591,7 +591,7 @@ export default function DailyAccountsPage() {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
+                  className="rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-50"
                 >
                   Submit daily account
                 </button>
@@ -677,7 +677,7 @@ export default function DailyAccountsPage() {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="rounded-lg bg-lunar-primary px-4 py-2.5 text-sm text-white disabled:opacity-60"
+                  className="rounded-xl bg-lunar-primary px-4 py-2.5 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
                 >
                   Save review
                 </button>

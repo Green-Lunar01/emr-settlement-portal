@@ -543,13 +543,26 @@ export function koboToNaira(kobo: number): number {
   return kobo / 100;
 }
 
+// Plain text (used outside email HTML, e.g. audit log entries).
 export function formatNaira(amount: number): string {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
+  const grouped = new Intl.NumberFormat("en-NG", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+
+  return `₦ ${grouped}`;
+}
+
+// Email HTML: a non-breaking space (not a thin space, which some mail
+// clients' font substitution collapses) keeps the Naira sign from
+// visually bleeding into the first digit.
+export function formatNairaHtml(amount: number): string {
+  const grouped = new Intl.NumberFormat("en-NG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+
+  return `&#8358;&nbsp;${grouped}`;
 }
 
 export function parseCount(value: unknown): number {

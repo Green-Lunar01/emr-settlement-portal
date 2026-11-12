@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Printer, Search, X } from "lucide-react";
+import { CheckCircle2, Plus, Printer, Search, X } from "lucide-react";
 
 import {
   apiRequest,
@@ -324,7 +324,7 @@ export default function BillingPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Billing</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
           <p className="mt-2 text-sm text-lunar-muted">
             Register patients, raise bills, collect payment, and print receipts.
           </p>
@@ -334,7 +334,7 @@ export default function BillingPage() {
           type="button"
           onClick={openNewBill}
           disabled={services.length === 0}
-          className="flex items-center gap-2 rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-50"
         >
           <Plus size={18} />
           Raise bill
@@ -360,7 +360,7 @@ export default function BillingPage() {
         </p>
       )}
 
-      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white">
+      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white shadow-card">
         <div className="flex flex-wrap gap-3 border-b border-lunar-border p-4">
           <div className="relative min-w-48 flex-1">
             <Search size={17} className="absolute left-3 top-3 text-lunar-muted" />
@@ -444,12 +444,12 @@ export default function BillingPage() {
       </section>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="bill-title"
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-raised"
           >
             <div className="flex items-center justify-between gap-4">
               <h2 id="bill-title" className="text-xl font-semibold">
@@ -649,7 +649,7 @@ export default function BillingPage() {
                       type="button"
                       disabled={busy || cartLines.length === 0}
                       onClick={() => void raiseBill()}
-                      className="rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+                      className="rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
                     >
                       Raise bill
                     </button>
@@ -666,28 +666,30 @@ export default function BillingPage() {
 
             {selectedBill && (
               <div className="mt-5 space-y-5">
-                <div className="rounded-lg bg-lunar-background p-4">
-                  <p className="font-medium">{selectedBill.patientName}</p>
-                  <p className="mt-1 text-xs text-lunar-muted">
-                    {selectedBill.patientUniqueId} · {selectedBill.departmentName}
-                  </p>
-                  <ul className="mt-3 space-y-1 text-sm text-lunar-muted">
-                    {selectedBill.items.map((item) => (
-                      <li key={item.serviceItemId} className="flex justify-between">
-                        <span>
-                          {item.name} x{item.quantity}
-                        </span>
-                        <span>{formatMoney(item.unitPrice * item.quantity)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-3 text-2xl font-semibold">
-                    {formatMoney(selectedBill.amount)}
-                  </p>
-                  <div className="mt-3">
-                    <StatusBadge value={selectedBill.status} />
+                {selectedBill.status !== "Paid" && (
+                  <div className="rounded-xl bg-lunar-background p-4">
+                    <p className="font-medium">{selectedBill.patientName}</p>
+                    <p className="mt-1 text-xs text-lunar-muted">
+                      {selectedBill.patientUniqueId} · {selectedBill.departmentName}
+                    </p>
+                    <ul className="mt-3 space-y-1 text-sm text-lunar-muted">
+                      {selectedBill.items.map((item) => (
+                        <li key={item.serviceItemId} className="flex justify-between">
+                          <span>
+                            {item.name} x{item.quantity}
+                          </span>
+                          <span>{formatMoney(item.unitPrice * item.quantity)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-3 text-2xl font-semibold tracking-tight">
+                      {formatMoney(selectedBill.amount)}
+                    </p>
+                    <div className="mt-3">
+                      <StatusBadge value={selectedBill.status} />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {selectedBill.status === "Draft" && (
                   <div className="space-y-4">
@@ -712,7 +714,7 @@ export default function BillingPage() {
                       type="button"
                       disabled={busy}
                       onClick={() => void choosePaymentMethod()}
-                      className="rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+                      className="rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
                     >
                       Continue
                     </button>
@@ -742,7 +744,7 @@ export default function BillingPage() {
                       type="button"
                       disabled={busy}
                       onClick={() => void confirmPayment()}
-                      className="rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+                      className="rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
                     >
                       Confirm transfer received
                     </button>
@@ -759,7 +761,7 @@ export default function BillingPage() {
                       type="button"
                       disabled={busy}
                       onClick={() => void confirmPayment()}
-                      className="rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+                      className="rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
                     >
                       Confirm money collected
                     </button>
@@ -767,56 +769,114 @@ export default function BillingPage() {
                 )}
 
                 {selectedBill.status === "Paid" && (
-                  <div className="space-y-4 rounded-lg border border-lunar-border p-5">
-                    <p className="text-sm font-medium">Receipt</p>
-                    <p className="text-lg font-semibold">{selectedBill.receiptNumber}</p>
-                    <dl className="space-y-1 text-sm text-lunar-muted">
-                      <div className="flex justify-between">
-                        <dt>Amount</dt>
-                        <dd>{formatMoney(selectedBill.amount)}</dd>
+                  <div
+                    id="receipt"
+                    className="overflow-hidden rounded-2xl border border-lunar-border shadow-card"
+                  >
+                    <div className="bg-gradient-to-br from-lunar-sidebar to-lunar-sidebar-light px-6 py-5 text-white">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-widest text-white/50">
+                            {selectedBill.facilityName}
+                          </p>
+                          <p className="mt-1 text-lg font-semibold">
+                            {selectedBill.departmentName}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 rounded-full bg-emerald-400/20 px-3 py-1.5 text-xs font-semibold text-emerald-300">
+                          <CheckCircle2 size={14} />
+                          Paid
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <dt>Method</dt>
-                        <dd>{selectedBill.paymentMethod}</dd>
+                    </div>
+
+                    <div className="space-y-5 bg-white p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="font-semibold">{selectedBill.patientName}</p>
+                          <p className="mt-1 text-xs text-lunar-muted">
+                            {selectedBill.patientUniqueId}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-lunar-muted">Receipt No.</p>
+                          <p className="font-mono text-sm font-semibold">
+                            {selectedBill.receiptNumber}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <dt>Paid at</dt>
-                        <dd>
+
+                      <ul className="divide-y divide-dashed divide-lunar-border text-sm">
+                        {selectedBill.items.map((item) => (
+                          <li
+                            key={item.serviceItemId}
+                            className="flex justify-between py-2.5"
+                          >
+                            <span className="text-lunar-muted">
+                              {item.name}{" "}
+                              <span className="text-lunar-muted/70">
+                                &times;{item.quantity}
+                              </span>
+                            </span>
+                            <span className="font-medium">
+                              {formatMoney(item.unitPrice * item.quantity)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+
+                      <div className="flex items-center justify-between rounded-xl bg-lunar-background px-4 py-3">
+                        <span className="text-sm font-medium">Total paid</span>
+                        <span className="text-xl font-bold tracking-tight">
+                          {formatMoney(selectedBill.amount)}
+                        </span>
+                      </div>
+
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                        <dt className="text-lunar-muted">Method</dt>
+                        <dd className="text-right font-medium">
+                          {selectedBill.paymentMethod}
+                        </dd>
+                        <dt className="text-lunar-muted">Paid at</dt>
+                        <dd className="text-right font-medium">
                           {selectedBill.paidAt
                             ? new Date(selectedBill.paidAt).toLocaleString("en-NG", {
                                 timeZone: "Africa/Lagos",
+                                dateStyle: "medium",
+                                timeStyle: "short",
                               })
                             : "—"}
                         </dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt>Cleared by</dt>
-                        <dd>{selectedBill.confirmedByName ?? "—"}</dd>
-                      </div>
-                    </dl>
+                        <dt className="text-lunar-muted">Cleared by</dt>
+                        <dd className="text-right font-medium">
+                          {selectedBill.confirmedByName ?? "—"}
+                        </dd>
+                      </dl>
 
-                    {selectedBill.qrDataUrl && (
-                      <div>
-                        <img
-                          src={selectedBill.qrDataUrl}
-                          alt="Receipt verification QR code"
-                          width={160}
-                          height={160}
-                        />
-                        <p className="mt-2 text-xs text-lunar-muted">
-                          Scan to verify this receipt. Also emailed to the patient.
-                        </p>
-                      </div>
-                    )}
+                      {selectedBill.qrDataUrl && (
+                        <div className="flex flex-col items-center gap-2 border-t border-dashed border-lunar-border pt-5">
+                          <img
+                            src={selectedBill.qrDataUrl}
+                            alt="Receipt verification QR code"
+                            width={140}
+                            height={140}
+                            className="rounded-lg border border-lunar-border p-2"
+                          />
+                          <p className="text-center text-xs text-lunar-muted">
+                            Scan to verify this receipt. Also emailed to the patient.
+                          </p>
+                        </div>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => window.print()}
-                      className="flex items-center gap-2 rounded-lg bg-lunar-primary px-4 py-2.5 text-sm font-medium text-white"
-                    >
-                      <Printer size={16} />
-                      Print receipt
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => window.print()}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark print:hidden"
+                      >
+                        <Printer size={16} />
+                        Print receipt
+                      </button>
+                    </div>
                   </div>
                 )}
 

@@ -47,16 +47,27 @@ export function AppProvider({ children }: AppProviderProps) {
     }));
 
     let cashiers: User[] = [];
+    let records: ApiEmr[] = [];
 
-    if (actor.role !== "cashier") {
+    // Only roles that actually manage or review a cashier directory/EMR
+    // need these — service_staff never does, and the backend 403s if
+    // asked, so don't even make the call.
+    if (
+      actor.role === "finance" ||
+      actor.role === "facility_manager" ||
+      actor.role === "front_office"
+    ) {
       const listed = await apiRequest<{ users: ApiUser[] }>("/api/users");
       cashiers = listed.users.map(toLocalUser);
     }
 
-    const emr = await apiRequest<{ records: ApiEmr[] }>("/api/emr");
+    if (actor.role !== "front_office" && actor.role !== "service_staff") {
+      const emr = await apiRequest<{ records: ApiEmr[] }>("/api/emr");
+      records = emr.records;
+    }
 
     setCurrentUser(actor);
-    setEmrRecords(emr.records);
+    setEmrRecords(records);
     setData(buildData(hospitals, mergeUsers(actor, cashiers)));
   }
 

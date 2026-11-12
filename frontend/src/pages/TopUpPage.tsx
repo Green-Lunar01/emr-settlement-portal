@@ -196,7 +196,7 @@ export default function TopUpPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Top Up</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Top Up</h1>
 
           <p className="mt-2 text-sm text-lunar-muted">
             {isCashier
@@ -210,7 +210,7 @@ export default function TopUpPage() {
             type="button"
             disabled={cashiers.length === 0}
             onClick={() => openForm()}
-            className="flex items-center gap-2 rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-50"
           >
             <Plus size={18} />
             Issue top-up
@@ -222,7 +222,7 @@ export default function TopUpPage() {
         {cards.map((card) => (
           <article
             key={card.label}
-            className="rounded-xl border border-lunar-border bg-white p-5"
+            className="rounded-xl border border-lunar-border bg-white shadow-card p-5"
           >
             <p className="text-sm text-lunar-muted">{card.label}</p>
             <p className="mt-4 text-2xl font-semibold">{card.value}</p>
@@ -249,7 +249,7 @@ export default function TopUpPage() {
       )}
 
       {!isCashier && (
-        <section className="mt-6 rounded-xl border border-lunar-border bg-white p-5">
+        <section className="mt-6 rounded-xl border border-lunar-border bg-white shadow-card p-5">
           <h2 className="text-lg font-semibold">Cashier accounts</h2>
           <p className="mt-2 text-sm text-lunar-muted">
             Select a cashier to issue a top-up.
@@ -288,7 +288,7 @@ export default function TopUpPage() {
         </section>
       )}
 
-      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white">
+      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white shadow-card">
         <div className="border-b border-lunar-border p-5">
           <h2 className="text-lg font-semibold">Disbursement ledger</h2>
           <p className="mt-2 text-sm text-lunar-muted">
@@ -425,12 +425,12 @@ export default function TopUpPage() {
       </section>
 
       {showForm && !isCashier && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="top-up-title"
-            className="w-full max-w-md rounded-xl bg-white p-6"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-raised"
           >
             <div className="flex items-center justify-between">
               <h2 id="top-up-title" className="text-xl font-semibold">
@@ -513,7 +513,7 @@ export default function TopUpPage() {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="rounded-lg bg-lunar-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                  className="rounded-xl bg-lunar-primary px-4 py-2 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
                 >
                   Issue top-up
                 </button>

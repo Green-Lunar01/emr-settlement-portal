@@ -48,7 +48,7 @@ export default function FacilitiesPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Facilities</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Facilities</h1>
           <p className="mt-2 text-sm text-lunar-muted">
             Facilities you're assigned to manage.
           </p>
@@ -62,7 +62,7 @@ export default function FacilitiesPage() {
             setMessage("");
             setShowForm(true);
           }}
-          className="flex items-center gap-2 rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white"
+          className="flex items-center gap-2 rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark"
         >
           <Plus size={18} />
           Add facility
@@ -81,7 +81,7 @@ export default function FacilitiesPage() {
         </p>
       )}
 
-      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white">
+      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white shadow-card">
         <table className="w-full text-left text-sm">
           <thead className="bg-lunar-background text-xs text-lunar-muted">
             <tr>
@@ -105,12 +105,12 @@ export default function FacilitiesPage() {
       </section>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="facility-title"
-            className="w-full max-w-md rounded-xl bg-white p-6"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-raised"
           >
             <div className="flex items-center justify-between">
               <h2 id="facility-title" className="text-xl font-semibold">
@@ -156,7 +156,7 @@ export default function FacilitiesPage() {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="rounded-lg bg-lunar-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                  className="rounded-xl bg-lunar-primary px-4 py-2 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
                 >
                   Create facility
                 </button>

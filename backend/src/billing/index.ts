@@ -3,7 +3,7 @@ import { AppError } from "../errors";
 import {
   asObject,
   billTotalKobo,
-  formatNaira,
+  formatNairaHtml,
   koboToNaira,
   nowIso,
   optionalText,
@@ -29,7 +29,7 @@ import {
   listBillsQuery,
   saveBill,
 } from "../repository";
-import { sendEmail } from "../mailer";
+import { emailShell, sendEmail } from "../mailer";
 import { billVerificationUrl, generateQrDataUrl } from "../qr";
 
 // Placeholder for the real TAP virtual-account API. Once TAP exposes an
@@ -336,7 +336,10 @@ export async function selectPaymentMethod(
 }
 
 async function sendBillNoticeEmail(bill: BillDoc): Promise<void> {
-  const patient = await findPatientById(bill.patientId);
+  const [patient, facility] = await Promise.all([
+    findPatientById(bill.patientId),
+    findFacility(bill.facilityId),
+  ]);
 
   if (!patient) {
     return;
@@ -344,53 +347,118 @@ async function sendBillNoticeEmail(bill: BillDoc): Promise<void> {
 
   const itemRows = bill.items
     .map(
-      (item) =>
-        `<tr><td>${item.name} x${item.quantity}</td><td style="text-align:right">${formatNaira(
-          koboToNaira(item.unitPriceKobo * item.quantity),
-        )}</td></tr>`,
+      (item) => `
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #e4e7ec;color:#344054;">
+            ${item.name}
+            <span style="color:#98a2b3;"> &times;${item.quantity}</span>
+          </td>
+          <td align="right" style="padding:10px 0;border-bottom:1px solid #e4e7ec;color:#101828;font-weight:600;white-space:nowrap;">
+            ${formatNairaHtml(koboToNaira(item.unitPriceKobo * item.quantity))}
+          </td>
+        </tr>`,
     )
     .join("");
 
   const transferSection =
     bill.paymentMethod === "Transfer" && bill.transfer
-      ? `<p>Pay <strong>${formatNaira(koboToNaira(bill.amountKobo))}</strong> to:</p>
-         <p>Account number: <strong>${bill.transfer.accountNumber}</strong><br/>
-         Bank: ${bill.transfer.bankName}<br/>
-         Reference: ${bill.transfer.reference}</p>`
-      : `<p>Total due: <strong>${formatNaira(koboToNaira(bill.amountKobo))}</strong>, payable at the point of service.</p>`;
+      ? `
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;background-color:#e4f6ef;border-radius:12px;">
+          <tr>
+            <td style="padding:18px 20px;">
+              <p style="margin:0 0 4px 0;font-size:12px;font-weight:700;letter-spacing:0.5px;color:#0b7a5c;text-transform:uppercase;">Pay to</p>
+              <p style="margin:0;font-size:18px;font-weight:700;color:#101828;letter-spacing:0.5px;">${bill.transfer.accountNumber}</p>
+              <p style="margin:4px 0 0 0;color:#344054;">${bill.transfer.bankName}</p>
+              <p style="margin:8px 0 0 0;font-size:12px;color:#667085;">Reference: ${bill.transfer.reference}</p>
+            </td>
+          </tr>
+        </table>`
+      : `<p style="margin-top:20px;color:#344054;">Payable at the point of service${bill.paymentMethod ? ` by ${bill.paymentMethod}` : ""}.</p>`;
 
   await sendEmail({
     to: patient.email,
     subject: "Your bill",
-    html: `
-      <p>Hello ${patient.name},</p>
-      <p>A bill has been raised for you:</p>
-      <table>${itemRows}</table>
-      ${transferSection}
-      <p>Patient ID: ${patient.uniqueId}</p>
-    `,
+    html: emailShell({
+      eyebrow: "New bill",
+      heading: `Hello ${patient.name}`,
+      facilityName: facility?.name,
+      bodyHtml: `
+        <p style="margin:0 0 20px 0;">A bill has been raised for you. Here's the breakdown:</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+          ${itemRows}
+          <tr>
+            <td style="padding:14px 0 0 0;font-weight:700;color:#101828;font-size:16px;">Total</td>
+            <td align="right" style="padding:14px 0 0 0;font-weight:700;color:#101828;font-size:16px;white-space:nowrap;">
+              ${formatNairaHtml(koboToNaira(bill.amountKobo))}
+            </td>
+          </tr>
+        </table>
+        ${transferSection}
+        <p style="margin:20px 0 0 0;font-size:12px;color:#667085;">Patient ID: ${patient.uniqueId}</p>
+      `,
+    }),
   });
 }
 
 async function sendReceiptEmail(bill: BillDoc): Promise<void> {
-  const patient = await findPatientById(bill.patientId);
+  const [patient, facility] = await Promise.all([
+    findPatientById(bill.patientId),
+    findFacility(bill.facilityId),
+  ]);
 
   if (!patient) {
     return;
   }
 
   const qrDataUrl = await generateQrDataUrl(billVerificationUrl(bill._id));
+  const paidAt = bill.paidAt
+    ? new Date(bill.paidAt).toLocaleString("en-NG", {
+        timeZone: "Africa/Lagos",
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : "";
 
   await sendEmail({
     to: patient.email,
     subject: "Your payment receipt",
-    html: `
-      <p>Hello ${patient.name},</p>
-      <p>Your payment of <strong>${formatNaira(koboToNaira(bill.amountKobo))}</strong> has been received.</p>
-      <p>Receipt number: <strong>${bill.receiptNumber}</strong></p>
-      <p>Scan this code to verify your receipt:</p>
-      <img src="${qrDataUrl}" alt="Receipt QR code" width="180" height="180" />
-    `,
+    html: emailShell({
+      eyebrow: "Payment received",
+      heading: `Thank you, ${patient.name}`,
+      facilityName: facility?.name,
+      bodyHtml: `
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f7fa;border-radius:12px;margin-bottom:24px;">
+          <tr>
+            <td style="padding:20px;">
+              <p style="margin:0 0 4px 0;font-size:12px;color:#667085;">Amount paid</p>
+              <p style="margin:0;font-size:28px;font-weight:700;color:#101828;">${formatNairaHtml(koboToNaira(bill.amountKobo))}</p>
+            </td>
+          </tr>
+        </table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+          <tr>
+            <td style="padding:6px 0;color:#667085;">Receipt number</td>
+            <td align="right" style="padding:6px 0;font-weight:600;color:#101828;">${bill.receiptNumber}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#667085;">Method</td>
+            <td align="right" style="padding:6px 0;font-weight:600;color:#101828;">${bill.paymentMethod}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#667085;">Paid at</td>
+            <td align="right" style="padding:6px 0;font-weight:600;color:#101828;">${paidAt}</td>
+          </tr>
+        </table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
+          <tr>
+            <td align="center" style="padding:20px;border:1px solid #e4e7ec;border-radius:12px;">
+              <img src="${qrDataUrl}" alt="Receipt QR code" width="160" height="160" style="display:block;margin:0 auto;" />
+              <p style="margin:12px 0 0 0;font-size:12px;color:#667085;">Scan to verify this receipt</p>
+            </td>
+          </tr>
+        </table>
+      `,
+    }),
   });
 }
 

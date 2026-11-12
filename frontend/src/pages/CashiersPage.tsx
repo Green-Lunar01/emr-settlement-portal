@@ -48,7 +48,7 @@ export default function CashiersPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Cashiers</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Cashiers</h1>
           <p className="mt-2 text-sm text-lunar-muted">
             View cashiers assigned to your facility. Front Office creates and
             approves new accounts.
@@ -56,7 +56,7 @@ export default function CashiersPage() {
         </div>
       </div>
 
-      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white">
+      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white shadow-card">
         <div className="flex flex-wrap gap-3 border-b border-lunar-border p-4">
           <div className="relative min-w-48 flex-1">
             <Search size={17} className="absolute left-3 top-3 text-lunar-muted" />

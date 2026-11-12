@@ -353,7 +353,7 @@ export default function EmrPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">EMR Accounting</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">EMR Accounting</h1>
           <p className="mt-2 text-sm text-lunar-muted">
             Enter the facility figures. The server compares them with TAP.
           </p>
@@ -363,7 +363,7 @@ export default function EmrPage() {
           <button
             type="button"
             onClick={openNewRecord}
-            className="flex items-center gap-2 rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white"
+            className="flex items-center gap-2 rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark"
           >
             <Plus size={18} />
             New record
@@ -388,7 +388,7 @@ export default function EmrPage() {
 
       {isFinance && (
         <form
-          className="mt-6 rounded-xl border border-lunar-border bg-white p-5"
+          className="mt-6 rounded-xl border border-lunar-border bg-white shadow-card p-5"
           onSubmit={(event) => {
             event.preventDefault();
             void saveTap();
@@ -474,7 +474,7 @@ export default function EmrPage() {
         </form>
       )}
 
-      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white">
+      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white shadow-card">
         <div className="flex flex-wrap gap-3 border-b border-lunar-border p-4">
           <div className="relative min-w-48 flex-1">
             <Search
@@ -617,12 +617,12 @@ export default function EmrPage() {
       </section>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="emr-dialog-title"
-            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-6"
+            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-raised"
           >
             <div className="flex items-center justify-between gap-4">
               <h2 id="emr-dialog-title" className="text-xl font-semibold">
@@ -789,7 +789,7 @@ export default function EmrPage() {
                   <button
                     type="submit"
                     disabled={busy || !figuresValid}
-                    className="rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+                    className="rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
                   >
                     {selectedRecord?.current.submissionStatus === "Submitted"
                       ? "Update submission"
@@ -906,7 +906,7 @@ export default function EmrPage() {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="rounded-lg bg-lunar-primary px-4 py-2.5 text-sm text-white disabled:opacity-60"
+                  className="rounded-xl bg-lunar-primary px-4 py-2.5 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
                 >
                   Save review
                 </button>

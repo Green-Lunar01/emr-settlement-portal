@@ -224,7 +224,7 @@ export default function StaffPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Staff</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Staff</h1>
           <p className="mt-2 text-sm text-lunar-muted">
             Approve onboarding requests, or add an account directly.
           </p>
@@ -238,7 +238,7 @@ export default function StaffPage() {
             setMessage("");
             setShowForm(true);
           }}
-          className="flex items-center gap-2 rounded-lg bg-lunar-primary px-4 py-3 text-sm font-medium text-white"
+          className="flex items-center gap-2 rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark"
         >
           <Plus size={18} />
           Add account directly
@@ -257,7 +257,7 @@ export default function StaffPage() {
         </p>
       )}
 
-      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white">
+      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white shadow-card">
         <div className="border-b border-lunar-border p-5">
           <h2 className="text-lg font-semibold">Pending requests</h2>
           <p className="mt-1 text-sm text-lunar-muted">
@@ -348,7 +348,7 @@ export default function StaffPage() {
         )}
       </section>
 
-      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white">
+      <section className="mt-6 overflow-hidden rounded-xl border border-lunar-border bg-white shadow-card">
         <div className="border-b border-lunar-border p-5">
           <h2 className="text-lg font-semibold">All staff</h2>
         </div>
@@ -409,12 +409,12 @@ export default function StaffPage() {
       </section>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-staff-title"
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-raised"
           >
             <div className="flex items-center justify-between">
               <h2 id="create-staff-title" className="text-xl font-semibold">
@@ -563,7 +563,7 @@ export default function StaffPage() {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="rounded-lg bg-lunar-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                  className="rounded-xl bg-lunar-primary px-4 py-2 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
                 >
                   Create account
                 </button>
