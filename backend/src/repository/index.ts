@@ -499,6 +499,12 @@ export async function findBillById(id: string): Promise<BillDoc | null> {
   return bills().findOne({ _id: id });
 }
 
+export async function findBillByReceiptNumber(
+  receiptNumber: string,
+): Promise<BillDoc | null> {
+  return bills().findOne({ receiptNumber });
+}
+
 export async function saveBill(
   id: string,
   expectedUpdatedAt: string,

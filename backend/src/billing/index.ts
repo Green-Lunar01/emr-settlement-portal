@@ -19,6 +19,7 @@ import {
 } from "../entity";
 import {
   findBillById,
+  findBillByReceiptNumber,
   findDepartment,
   findFacility,
   findPatientById,
@@ -527,7 +528,11 @@ export async function getBill(
 export async function verifyBill(
   billId: string,
 ): Promise<PublicBillVerification> {
-  const bill = await findBillById(billId);
+  // The QR code links by internal id, but a person reading a printed or
+  // emailed receipt only ever sees the receipt number — so typing that
+  // in directly has to resolve too, not just scanning the code.
+  const bill =
+    (await findBillById(billId)) ?? (await findBillByReceiptNumber(billId));
 
   if (!bill || bill.status !== "Paid") {
     return {
