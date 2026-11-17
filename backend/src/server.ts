@@ -206,7 +206,10 @@ const routes: Route[] = [
 
   route("GET", "/api/facilities", async ({ req }) => {
     const user = await requireUser(req);
-    const facilities = await listFacilities(user.facilityIds);
+    const facilities =
+      user.role === "platform_admin"
+        ? await listAllFacilities()
+        : await listFacilities(user.facilityIds);
     return {
       status: 200,
       body: {

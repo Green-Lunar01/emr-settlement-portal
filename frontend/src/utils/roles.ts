@@ -6,6 +6,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   cashier: "Cashier (Operations)",
   front_office: "Admin",
   service_staff: "Service Staff",
+  platform_admin: "Green Lunar Admin",
 };
 
 export const ROLE_HOME: Record<UserRole, string> = {
@@ -14,4 +15,5 @@ export const ROLE_HOME: Record<UserRole, string> = {
   cashier: "/cashier",
   front_office: "/front-office",
   service_staff: "/service-staff",
+  platform_admin: "/platform-admin",
 };

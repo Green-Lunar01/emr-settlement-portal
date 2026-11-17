@@ -61,7 +61,11 @@ export function AppProvider({ children }: AppProviderProps) {
       cashiers = listed.users.map(toLocalUser);
     }
 
-    if (actor.role !== "front_office" && actor.role !== "service_staff") {
+    if (
+      actor.role !== "front_office" &&
+      actor.role !== "service_staff" &&
+      actor.role !== "platform_admin"
+    ) {
       const emr = await apiRequest<{ records: ApiEmr[] }>("/api/emr");
       records = emr.records;
     }

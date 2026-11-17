@@ -48,7 +48,10 @@ export default function DashboardLayout() {
       { label: "Staff", path: home, icon: UserCheck, end: true },
       { label: "Departments", path: `${home}/departments`, icon: Building2, end: false },
       { label: "Drugs & Services", path: `${home}/services`, icon: Pill, end: false },
-      { label: "Facilities", path: `${home}/facilities`, icon: Building2, end: false },
+    ];
+  } else if (currentUser.role === "platform_admin") {
+    navigation = [
+      { label: "Facilities", path: home, icon: Building2, end: true },
     ];
   } else if (currentUser.role === "service_staff") {
     navigation = [

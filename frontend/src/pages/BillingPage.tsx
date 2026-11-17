@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Plus, Printer, Search, X } from "lucide-react";
+import { CheckCircle2, CreditCard, Plus, Printer, Search, X } from "lucide-react";
 
 import {
   apiRequest,
@@ -11,6 +11,36 @@ import {
 } from "../api/client";
 import { useApp } from "../hooks/useApp";
 import { formatMoney } from "../utils/accounting";
+
+// Mirrors the backend's TECH_FEE_KOBO, for the pre-submit preview only —
+// the authoritative total is always computed and stored server-side.
+const TECH_FEE_PREVIEW = 200;
+
+function formatCardNumber(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 16);
+  return digits.replace(/(.{4})/g, "$1 ").trim();
+}
+
+function formatExpiry(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+
+  if (digits.length <= 2) {
+    return digits;
+  }
+
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+interface CardDetailsForm {
+  name: string;
+  number: string;
+  expiry: string;
+  cvv: string;
+}
+
+function emptyCardForm(): CardDetailsForm {
+  return { name: "", number: "", expiry: "", cvv: "" };
+}
 
 function StatusBadge({ value }: { value: string }) {
   const colour =
@@ -62,6 +92,7 @@ export default function BillingPage() {
   const [departmentId, setDepartmentId] = useState("");
   const [cart, setCart] = useState<Map<string, number>>(new Map());
   const [method, setMethod] = useState<PaymentMethod>("Transfer");
+  const [cardForm, setCardForm] = useState<CardDetailsForm>(emptyCardForm());
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -152,6 +183,7 @@ export default function BillingPage() {
     setDepartmentId(isServiceStaff ? actor.departmentId ?? "" : "");
     setCart(new Map());
     setMethod("Transfer");
+    setCardForm(emptyCardForm());
     setError("");
     setMessage("");
     setModalOpen(true);
@@ -160,6 +192,7 @@ export default function BillingPage() {
   function openBill(bill: ApiBill) {
     setSelectedId(bill.id);
     setMethod(bill.paymentMethod ?? "Transfer");
+    setCardForm(emptyCardForm());
     setError("");
     setMessage("");
     setModalOpen(true);
@@ -284,7 +317,7 @@ export default function BillingPage() {
       setMessage(
         method === "Transfer"
           ? "Virtual account generated. The patient has also been emailed."
-          : "Awaiting confirmation that money has been collected.",
+          : "Enter the payer's card details to complete payment.",
       );
     } catch (err) {
       setError(
@@ -634,8 +667,19 @@ export default function BillingPage() {
                     )}
 
                     {cartLines.length > 0 && (
-                      <div className="rounded-lg bg-lunar-background p-4">
-                        <p className="text-sm font-medium">Total: {formatMoney(cartTotal)}</p>
+                      <div className="space-y-1.5 rounded-lg bg-lunar-background p-4 text-sm">
+                        <div className="flex justify-between text-lunar-muted">
+                          <span>Subtotal</span>
+                          <span>{formatMoney(cartTotal)}</span>
+                        </div>
+                        <div className="flex justify-between text-lunar-muted">
+                          <span>Technology charge</span>
+                          <span>{formatMoney(TECH_FEE_PREVIEW)}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-lunar-border pt-1.5 font-semibold">
+                          <span>Total</span>
+                          <span>{formatMoney(cartTotal + TECH_FEE_PREVIEW)}</span>
+                        </div>
                       </div>
                     )}
 
@@ -681,6 +725,10 @@ export default function BillingPage() {
                           <span>{formatMoney(item.unitPrice * item.quantity)}</span>
                         </li>
                       ))}
+                      <li className="flex justify-between">
+                        <span>Technology charge</span>
+                        <span>{formatMoney(selectedBill.techFee)}</span>
+                      </li>
                     </ul>
                     <p className="mt-3 text-2xl font-semibold tracking-tight">
                       {formatMoney(selectedBill.amount)}
@@ -695,7 +743,7 @@ export default function BillingPage() {
                   <div className="space-y-4">
                     <p className="text-sm font-medium">How will the payer pay?</p>
                     <div className="flex gap-3">
-                      {(["Transfer", "POS", "Cash"] as PaymentMethod[]).map((option) => (
+                      {(["Transfer", "Card"] as PaymentMethod[]).map((option) => (
                         <button
                           key={option}
                           type="button"
@@ -752,20 +800,102 @@ export default function BillingPage() {
                 )}
 
                 {selectedBill.status === "Awaiting Confirmation" && (
-                  <div className="space-y-4">
-                    <p className="text-sm text-lunar-muted">
-                      Confirm that {selectedBill.paymentMethod?.toLowerCase()} payment
-                      has been collected before printing the receipt.
+                  <form
+                    className="space-y-4"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void confirmPayment();
+                    }}
+                  >
+                    <p className="flex items-center gap-2 text-sm font-medium">
+                      <CreditCard size={16} className="text-lunar-muted" />
+                      Enter card details
                     </p>
+                    <p className="text-xs text-lunar-muted">
+                      This simulates the card terminal — no real card data is
+                      stored or sent anywhere.
+                    </p>
+
+                    <label className="block text-sm">
+                      Cardholder name
+                      <input
+                        required
+                        value={cardForm.name}
+                        onChange={(event) =>
+                          setCardForm({ ...cardForm, name: event.target.value })
+                        }
+                        className={inputClass}
+                      />
+                    </label>
+
+                    <label className="block text-sm">
+                      Card number
+                      <input
+                        required
+                        inputMode="numeric"
+                        placeholder="4242 4242 4242 4242"
+                        value={cardForm.number}
+                        onChange={(event) =>
+                          setCardForm({
+                            ...cardForm,
+                            number: formatCardNumber(event.target.value),
+                          })
+                        }
+                        minLength={19}
+                        maxLength={19}
+                        className={inputClass}
+                      />
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <label className="block text-sm">
+                        Expiry (MM/YY)
+                        <input
+                          required
+                          inputMode="numeric"
+                          placeholder="MM/YY"
+                          value={cardForm.expiry}
+                          onChange={(event) =>
+                            setCardForm({
+                              ...cardForm,
+                              expiry: formatExpiry(event.target.value),
+                            })
+                          }
+                          minLength={5}
+                          maxLength={5}
+                          className={inputClass}
+                        />
+                      </label>
+
+                      <label className="block text-sm">
+                        CVV
+                        <input
+                          required
+                          inputMode="numeric"
+                          placeholder="123"
+                          value={cardForm.cvv}
+                          onChange={(event) =>
+                            setCardForm({
+                              ...cardForm,
+                              cvv: event.target.value.replace(/\D/g, "").slice(0, 4),
+                            })
+                          }
+                          minLength={3}
+                          maxLength={4}
+                          className={inputClass}
+                        />
+                      </label>
+                    </div>
+
                     <button
-                      type="button"
+                      type="submit"
                       disabled={busy}
-                      onClick={() => void confirmPayment()}
-                      className="rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-lunar-primary px-4 py-3 text-sm font-medium text-white shadow-raised hover:bg-lunar-primary-dark disabled:opacity-60"
                     >
-                      Confirm money collected
+                      <CreditCard size={16} />
+                      Pay {formatMoney(selectedBill.amount)}
                     </button>
-                  </div>
+                  </form>
                 )}
 
                 {selectedBill.status === "Paid" && (
@@ -823,6 +953,12 @@ export default function BillingPage() {
                             </span>
                           </li>
                         ))}
+                        <li className="flex justify-between py-2.5">
+                          <span className="text-lunar-muted">Technology charge</span>
+                          <span className="font-medium">
+                            {formatMoney(selectedBill.techFee)}
+                          </span>
+                        </li>
                       </ul>
 
                       <div className="flex items-center justify-between rounded-xl bg-lunar-background px-4 py-3">

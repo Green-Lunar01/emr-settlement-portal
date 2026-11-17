@@ -181,9 +181,23 @@ export default function App() {
                 path="services"
                 element={<ServicesPage />}
               />
+            </Route>
+          </Route>
 
+          {/* Platform Admin portal (Green Lunar) */}
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={["platform_admin"]}
+              />
+            }
+          >
+            <Route
+              path="/platform-admin"
+              element={<DashboardLayout />}
+            >
               <Route
-                path="facilities"
+                index
                 element={<FacilitiesPage />}
               />
             </Route>

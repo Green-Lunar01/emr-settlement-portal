@@ -3,7 +3,8 @@ export type UserRole =
   | "facility_manager"
   | "cashier"
   | "front_office"
-  | "service_staff";
+  | "service_staff"
+  | "platform_admin";
 
 export type AccountStatus = "active" | "inactive";
 

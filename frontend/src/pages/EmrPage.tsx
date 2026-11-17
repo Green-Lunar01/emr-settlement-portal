@@ -114,7 +114,7 @@ export default function EmrPage() {
   const [resolution, setResolution] = useState("");
   const [tapPreview, setTapPreview] = useState<ApiTap | null>(null);
   const [tapForm, setTapForm] = useState<TapForm>({
-    facilityId: "",
+    facilityId: currentUser?.hospitalIds[0] ?? "",
     date: getToday(),
     transactionCount: "",
     transactionAmount: "",

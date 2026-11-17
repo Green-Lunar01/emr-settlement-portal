@@ -5,7 +5,12 @@ export type UserRole =
   | "facility_manager"
   | "finance"
   | "front_office"
-  | "service_staff";
+  | "service_staff"
+  // Green Lunar's own platform-level account. The only role that can
+  // create facilities; never creatable via onboarding/sign-up or by any
+  // facility's own Admin — seeded directly, deliberately, so a facility
+  // Admin can never grant themselves this power.
+  | "platform_admin";
 
 export type AccountStatus = "active" | "inactive";
 
@@ -30,7 +35,10 @@ export type WalletReviewStatus = "Pending" | "Okay" | "Check Record";
 
 export type WalletDecision = Exclude<WalletReviewStatus, "Pending">;
 
-export type PaymentMethod = "Transfer" | "POS" | "Cash";
+export type PaymentMethod = "Transfer" | "Card";
+
+// Flat platform fee added to every bill, on top of the itemized total.
+export const TECH_FEE_KOBO = 20_000;
 
 export type BillStatus =
   | "Draft"
@@ -250,6 +258,10 @@ export interface BillDoc {
   raisedBy: string;
   raisedByRole: UserRole;
   items: BillLineItemDoc[];
+  // Items total + techFeeKobo. The fee is stored per-bill (not just
+  // computed from a constant at read time) so a historic bill keeps the
+  // fee that actually applied to it even if TECH_FEE_KOBO changes later.
+  techFeeKobo: number;
   amountKobo: number;
   status: BillStatus;
   paymentMethod: PaymentMethod | null;
@@ -461,6 +473,7 @@ export interface PublicBill {
   raisedByName: string;
   raisedByRole: UserRole;
   items: PublicBillLineItem[];
+  techFee: number;
   amount: number;
   status: BillStatus;
   paymentMethod: PaymentMethod | null;
@@ -996,7 +1009,7 @@ export function toPublicWalletSummary(
 }
 
 export function parsePaymentMethod(value: unknown): PaymentMethod {
-  if (value !== "Transfer" && value !== "POS" && value !== "Cash") {
+  if (value !== "Transfer" && value !== "Card") {
     throw new AppError(400, "Select a valid payment method.");
   }
 
@@ -1116,6 +1129,7 @@ export function toPublicBill(
       unitPrice: koboToNaira(item.unitPriceKobo),
       quantity: item.quantity,
     })),
+    techFee: koboToNaira(bill.techFeeKobo),
     amount: koboToNaira(bill.amountKobo),
     status: bill.status,
     paymentMethod: bill.paymentMethod,

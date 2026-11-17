@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Moon } from "lucide-react";
+import { Eye, EyeOff, Moon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { apiRequest, type ApiDepartment } from "../api/client";
 import type { UserRole } from "../types";
@@ -45,6 +45,8 @@ export default function SignupPage() {
   const [facilities, setFacilities] = useState<ApiPublicFacility[]>([]);
   const [departments, setDepartments] = useState<ApiDepartment[]>([]);
   const [form, setForm] = useState<SignupForm>(emptyForm());
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -335,32 +337,52 @@ export default function SignupPage() {
 
                 <label className="block text-sm font-medium">
                   Password
-                  <input
-                    required
-                    type="password"
-                    minLength={8}
-                    autoComplete="new-password"
-                    value={form.password}
-                    onChange={(event) =>
-                      setForm({ ...form, password: event.target.value })
-                    }
-                    className={inputClass}
-                  />
+                  <div className="relative">
+                    <input
+                      required
+                      type={showPassword ? "text" : "password"}
+                      minLength={8}
+                      autoComplete="new-password"
+                      value={form.password}
+                      onChange={(event) =>
+                        setForm({ ...form, password: event.target.value })
+                      }
+                      className={`${inputClass} pr-11`}
+                    />
+                    <button
+                      type="button"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      onClick={() => setShowPassword((show) => !show)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-lunar-muted hover:text-lunar-text"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </label>
 
                 <label className="block text-sm font-medium">
                   Confirm password
-                  <input
-                    required
-                    type="password"
-                    minLength={8}
-                    autoComplete="new-password"
-                    value={form.confirmPassword}
-                    onChange={(event) =>
-                      setForm({ ...form, confirmPassword: event.target.value })
-                    }
-                    className={inputClass}
-                  />
+                  <div className="relative">
+                    <input
+                      required
+                      type={showConfirmPassword ? "text" : "password"}
+                      minLength={8}
+                      autoComplete="new-password"
+                      value={form.confirmPassword}
+                      onChange={(event) =>
+                        setForm({ ...form, confirmPassword: event.target.value })
+                      }
+                      className={`${inputClass} pr-11`}
+                    />
+                    <button
+                      type="button"
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                      onClick={() => setShowConfirmPassword((show) => !show)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-lunar-muted hover:text-lunar-text"
+                    >
+                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </label>
 
                 {error && (

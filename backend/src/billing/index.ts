@@ -9,6 +9,7 @@ import {
   optionalText,
   parsePaymentMethod,
   requiredId,
+  TECH_FEE_KOBO,
   toPublicBill,
   type BillDoc,
   type BillLineItemDoc,
@@ -242,7 +243,8 @@ export async function createBill(
     raisedBy: actor._id,
     raisedByRole: actor.role,
     items,
-    amountKobo: billTotalKobo(items),
+    techFeeKobo: TECH_FEE_KOBO,
+    amountKobo: billTotalKobo(items) + TECH_FEE_KOBO,
     status: "Draft",
     paymentMethod: null,
     transfer: null,
@@ -336,17 +338,8 @@ export async function selectPaymentMethod(
   return presentBill(next);
 }
 
-async function sendBillNoticeEmail(bill: BillDoc): Promise<void> {
-  const [patient, facility] = await Promise.all([
-    findPatientById(bill.patientId),
-    findFacility(bill.facilityId),
-  ]);
-
-  if (!patient) {
-    return;
-  }
-
-  const itemRows = bill.items
+function buildItemRows(bill: BillDoc): string {
+  const lineRows = bill.items
     .map(
       (item) => `
         <tr>
@@ -361,6 +354,25 @@ async function sendBillNoticeEmail(bill: BillDoc): Promise<void> {
     )
     .join("");
 
+  return `${lineRows}
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #e4e7ec;color:#344054;">Technology charge</td>
+          <td align="right" style="padding:10px 0;border-bottom:1px solid #e4e7ec;color:#101828;font-weight:600;white-space:nowrap;">
+            ${formatNairaHtml(koboToNaira(bill.techFeeKobo))}
+          </td>
+        </tr>`;
+}
+
+async function sendBillNoticeEmail(bill: BillDoc): Promise<void> {
+  const [patient, facility] = await Promise.all([
+    findPatientById(bill.patientId),
+    findFacility(bill.facilityId),
+  ]);
+
+  if (!patient) {
+    return;
+  }
+
   const transferSection =
     bill.paymentMethod === "Transfer" && bill.transfer
       ? `
@@ -374,7 +386,7 @@ async function sendBillNoticeEmail(bill: BillDoc): Promise<void> {
             </td>
           </tr>
         </table>`
-      : `<p style="margin-top:20px;color:#344054;">Payable at the point of service${bill.paymentMethod ? ` by ${bill.paymentMethod}` : ""}.</p>`;
+      : `<p style="margin-top:20px;color:#344054;">Payable by card.</p>`;
 
   await sendEmail({
     to: patient.email,
@@ -386,7 +398,7 @@ async function sendBillNoticeEmail(bill: BillDoc): Promise<void> {
       bodyHtml: `
         <p style="margin:0 0 20px 0;">A bill has been raised for you. Here's the breakdown:</p>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
-          ${itemRows}
+          ${buildItemRows(bill)}
           <tr>
             <td style="padding:14px 0 0 0;font-weight:700;color:#101828;font-size:16px;">Total</td>
             <td align="right" style="padding:14px 0 0 0;font-weight:700;color:#101828;font-size:16px;white-space:nowrap;">
@@ -435,6 +447,9 @@ async function sendReceiptEmail(bill: BillDoc): Promise<void> {
               <p style="margin:0;font-size:28px;font-weight:700;color:#101828;">${formatNairaHtml(koboToNaira(bill.amountKobo))}</p>
             </td>
           </tr>
+        </table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;margin-bottom:20px;">
+          ${buildItemRows(bill)}
         </table>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
           <tr>

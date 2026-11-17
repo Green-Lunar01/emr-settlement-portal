@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, Moon, ShieldCheck } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Moon, ShieldCheck } from "lucide-react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "../hooks/useApp";
 import { ROLE_HOME } from "../utils/roles";
@@ -10,6 +10,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -146,17 +147,27 @@ export default function LoginPage() {
                 Password
               </label>
 
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(event) =>
-                  setPassword(event.target.value)
-                }
-                className="w-full rounded-xl border border-lunar-border bg-white px-4 py-3 text-sm shadow-card focus:border-lunar-primary"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(event) =>
+                    setPassword(event.target.value)
+                  }
+                  className="w-full rounded-xl border border-lunar-border bg-white px-4 py-3 pr-11 text-sm shadow-card focus:border-lunar-primary"
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((show) => !show)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-lunar-muted hover:text-lunar-text"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             {error && (

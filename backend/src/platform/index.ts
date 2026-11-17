@@ -10,7 +10,6 @@ import {
   type UserDoc,
 } from "../entity";
 import {
-  addFacilityToUser,
   insertAudit,
   insertFacility,
   listAuditRecent,
@@ -20,8 +19,8 @@ export async function createFacility(
   actor: UserDoc,
   input: unknown,
 ): Promise<{ id: string; name: string }> {
-  if (actor.role !== "front_office") {
-    throw new AppError(403, "Only front office can add facilities.");
+  if (actor.role !== "platform_admin") {
+    throw new AppError(403, "Only a platform admin can add facilities.");
   }
 
   const body = asObject(input);
@@ -29,7 +28,6 @@ export async function createFacility(
 
   const facility: FacilityDoc = { _id: randomUUID(), name };
   await insertFacility(facility);
-  await addFacilityToUser(actor._id, facility._id);
 
   const at = nowIso();
   await insertAudit({

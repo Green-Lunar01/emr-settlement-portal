@@ -186,7 +186,7 @@ export interface ApiDepartment {
   createdAt: string;
 }
 
-export type PaymentMethod = "Transfer" | "POS" | "Cash";
+export type PaymentMethod = "Transfer" | "Card";
 
 export type BillStatus =
   | "Draft"
@@ -242,6 +242,7 @@ export interface ApiBill {
   raisedByName: string;
   raisedByRole: UserRole;
   items: ApiBillLineItem[];
+  techFee: number;
   amount: number;
   status: BillStatus;
   paymentMethod: PaymentMethod | null;
