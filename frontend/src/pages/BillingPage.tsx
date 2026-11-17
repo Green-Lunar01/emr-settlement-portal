@@ -811,15 +811,12 @@ export default function BillingPage() {
                       <CreditCard size={16} className="text-lunar-muted" />
                       Enter card details
                     </p>
-                    <p className="text-xs text-lunar-muted">
-                      This simulates the card terminal — no real card data is
-                      stored or sent anywhere.
-                    </p>
 
                     <label className="block text-sm">
                       Cardholder name
                       <input
                         required
+                        autoComplete="off"
                         value={cardForm.name}
                         onChange={(event) =>
                           setCardForm({ ...cardForm, name: event.target.value })
@@ -832,6 +829,7 @@ export default function BillingPage() {
                       Card number
                       <input
                         required
+                        autoComplete="off"
                         inputMode="numeric"
                         placeholder="4242 4242 4242 4242"
                         value={cardForm.number}
@@ -852,6 +850,7 @@ export default function BillingPage() {
                         Expiry (MM/YY)
                         <input
                           required
+                          autoComplete="off"
                           inputMode="numeric"
                           placeholder="MM/YY"
                           value={cardForm.expiry}
@@ -871,6 +870,7 @@ export default function BillingPage() {
                         CVV
                         <input
                           required
+                          autoComplete="off"
                           inputMode="numeric"
                           placeholder="123"
                           value={cardForm.cvv}

@@ -268,7 +268,12 @@ export interface BillDoc {
   transfer: TransferDetailsDoc | null;
   paidAt: string | null;
   confirmedBy: string | null;
-  receiptNumber: string | null;
+  // Omitted entirely (not set to null) until payment is confirmed — the
+  // unique index on this field is sparse, and MongoDB's "sparse" only
+  // excludes documents where the field is absent, not documents where
+  // it's present with value null. Setting it to null here would let only
+  // one unpaid bill exist across the whole collection at a time.
+  receiptNumber?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1136,7 +1141,7 @@ export function toPublicBill(
     transfer: bill.transfer,
     paidAt: bill.paidAt,
     confirmedByName,
-    receiptNumber: bill.receiptNumber,
+    receiptNumber: bill.receiptNumber ?? null,
     qrDataUrl,
     createdAt: bill.createdAt,
     updatedAt: bill.updatedAt,

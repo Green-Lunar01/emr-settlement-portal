@@ -124,7 +124,9 @@ async function presentBill(bill: BillDoc): Promise<PublicBill> {
       findUserById(bill.raisedBy),
       bill.confirmedBy ? findUserById(bill.confirmedBy) : Promise.resolve(null),
       bill.status === "Paid"
-        ? generateQrDataUrl(billVerificationUrl(bill._id))
+        ? generateQrDataUrl(
+            billVerificationUrl(bill.receiptNumber ?? bill._id),
+          )
         : Promise.resolve(null),
     ]);
 
@@ -250,7 +252,6 @@ export async function createBill(
     transfer: null,
     paidAt: null,
     confirmedBy: null,
-    receiptNumber: null,
     createdAt: at,
     updatedAt: at,
   };
@@ -423,7 +424,9 @@ async function sendReceiptEmail(bill: BillDoc): Promise<void> {
     return;
   }
 
-  const qrDataUrl = await generateQrDataUrl(billVerificationUrl(bill._id));
+  const qrDataUrl = await generateQrDataUrl(
+    billVerificationUrl(bill.receiptNumber ?? bill._id),
+  );
   const paidAt = bill.paidAt
     ? new Date(bill.paidAt).toLocaleString("en-NG", {
         timeZone: "Africa/Lagos",
@@ -543,11 +546,11 @@ export async function getBill(
 export async function verifyBill(
   billId: string,
 ): Promise<PublicBillVerification> {
-  // The QR code links by internal id, but a person reading a printed or
-  // emailed receipt only ever sees the receipt number — so typing that
-  // in directly has to resolve too, not just scanning the code.
+  // The QR code now links by receipt number (what's actually printed on
+  // the receipt), but old links and direct API calls by internal id
+  // still need to resolve too.
   const bill =
-    (await findBillById(billId)) ?? (await findBillByReceiptNumber(billId));
+    (await findBillByReceiptNumber(billId)) ?? (await findBillById(billId));
 
   if (!bill || bill.status !== "Paid") {
     return {
@@ -563,7 +566,7 @@ export async function verifyBill(
 
   return {
     valid: true,
-    receiptNumber: bill.receiptNumber,
+    receiptNumber: bill.receiptNumber ?? null,
     facilityName: facility?.name ?? "Unknown facility",
     amount: koboToNaira(bill.amountKobo),
     paidAt: bill.paidAt,
